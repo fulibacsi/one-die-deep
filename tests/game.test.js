@@ -101,7 +101,7 @@ test('skills cost Focus and are refused without it', () => {
   G.useSkill(s, 'smash');
   assert.equal(s.hero.focus, 0);
   assert.equal(G.enemy(s).hp, 3, 'Smash hits for 2');
-  const before = JSON.stringify(s);
+  const before = JSON.stringify({ ...s, events: [] });
   G.useSkill(s, 'smash');
   assert.equal(JSON.stringify(s), before);
 });
@@ -200,6 +200,25 @@ test('stairs lead down; the last floor has the boss, and beating it wins', () =>
   forceRoll(last, 6);
   G.attack(last);
   assert.equal(G.mode(last), 'won');
+});
+
+test('each action lists what it caused, in order, and only that', () => {
+  const types = (s) => s.events.map((e) => e.type);
+  const s = forceRoll(fight({ attack: 20 }), 3);
+  G.attack(s);
+  assert.deepEqual(types(s), ['hit', 'hurt']);
+  forceRoll(s, 6);
+  G.attack(s);
+  assert.deepEqual(types(s), ['hit', 'kill']);
+  assert.deepEqual(s.events[0], { type: 'hit', damage: 2, crit: true });
+  G.attack(s);
+  assert.deepEqual(types(s), [], 'a refused action causes nothing');
+
+  const t = forceRoll(fight({ hp: 1, xp: R.xpToLevel(1) }), 6);
+  G.attack(t);
+  assert.deepEqual(types(t), ['hit', 'kill', 'levelup']);
+  G.chooseStat(t, 'might');
+  assert.deepEqual(t.events, [{ type: 'stat', stat: 'might', skill: R.CLASSES.warrior.skills[1] }]);
 });
 
 test('running out of HP ends the run', () => {

@@ -3,10 +3,12 @@
 // except through its exported actions.
 import * as G from './game.js';
 import * as R from './rules.js';
+import * as S from './sound.js';
 
 const screen = document.getElementById('screen');
 const depthEl = document.getElementById('depth');
 const newRunBtn = document.getElementById('new-run');
+const soundBtn = document.getElementById('sound');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let state = null;
@@ -397,21 +399,32 @@ function act(fn) {
   if (rolling || !state) return;
   const before = state.roll?.n ?? 0;
   fn(state);
-  if ((state.roll?.n ?? 0) !== before) spin(state.roll.die).then(render);
-  else render();
+  const show = () => {
+    render();
+    S.playEvents(state.events);
+  };
+  if ((state.roll?.n ?? 0) !== before) spin(state.roll.die).then(show);
+  else show();
 }
 
 function spin(face) {
   const die = document.getElementById('die');
-  if (!die || reduceMotion) return Promise.resolve();
+  if (!die || reduceMotion) {
+    S.play('land');
+    return Promise.resolve();
+  }
   rolling = true;
   die.classList.remove('blank', 'six', 'one');
   die.classList.add('rolling');
-  const timer = setInterval(() => showFace(die, 1 + Math.floor(Math.random() * 6)), 55);
+  const timer = setInterval(() => {
+    showFace(die, 1 + Math.floor(Math.random() * 6));
+    S.play('tick');
+  }, 55);
   return new Promise((resolve) =>
     setTimeout(() => {
       clearInterval(timer);
       showFace(die, face);
+      S.play('land');
       rolling = false;
       resolve();
     }, 420),
@@ -422,6 +435,7 @@ function start(classId) {
   state = G.newGame(classId, Date.now());
   picking = false;
   render();
+  S.play('descend');
 }
 
 const ACTIONS = {
@@ -451,6 +465,19 @@ newRunBtn.addEventListener('click', () => {
   picking = true;
   render();
 });
+
+// Audio may only start after a gesture; every gesture also resumes it.
+for (const type of ['pointerdown', 'keydown']) document.addEventListener(type, () => S.unlock(), { capture: true });
+
+function renderSound() {
+  soundBtn.setAttribute('aria-pressed', String(!S.isMuted()));
+  soundBtn.textContent = S.isMuted() ? 'Sound off' : 'Sound on';
+}
+soundBtn.addEventListener('click', () => {
+  S.setMuted(!S.isMuted());
+  renderSound();
+});
+renderSound();
 
 const MOVES = { ArrowUp: [0, -1], ArrowRight: [1, 0], ArrowDown: [0, 1], ArrowLeft: [-1, 0] };
 

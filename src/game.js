@@ -1,6 +1,9 @@
 // The game engine: plain data in, plain data out. Every action mutates the
 // state object and returns it. The state is JSON-serializable, including the
 // die's seed, so a run can be saved, replayed or simulated headless.
+//
+// Each action also replaces state.events with what it caused, in order
+// (hit, hurt, kill, levelup, ...), for the view to animate and sound out.
 import * as R from './rules.js';
 
 const LOG_SIZE = 40;
@@ -73,6 +76,7 @@ export function newGame(classId, seed = Date.now()) {
     combat: null,
     prompts: [],
     roll: null,
+    events: [],
     log: [],
     over: null,
     tally: { kills: 0, rounds: 0, fights: 0 },
@@ -86,6 +90,15 @@ export function newGame(classId, seed = Date.now()) {
 
 const a = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
 
+function emit(state, type, data) {
+  state.events.push({ type, ...data });
+}
+
+// Called first by every action: events describe only the latest action.
+function begin(state) {
+  state.events = [];
+}
+
 function say(state, text) {
   state.log.push(text);
   if (state.log.length > LOG_SIZE) state.log.shift();
@@ -95,19 +108,22 @@ function record(state, roll) {
   state.roll = { n: (state.roll?.n ?? 0) + 1, ...roll };
 }
 
-function heal(state, amount) {
+function heal(state, amount, source) {
   const before = state.hero.hp;
   state.hero.hp = Math.min(maxHp(state), state.hero.hp + amount);
+  emit(state, 'heal', { amount: state.hero.hp - before, source });
   return state.hero.hp - before;
 }
 
 function hurt(state, amount) {
   state.hero.hp -= amount;
+  emit(state, 'hurt', { amount });
   if (state.hero.hp <= 0) {
     state.hero.hp = 0;
     state.over = 'dead';
     state.combat = null;
     say(state, 'You die.');
+    emit(state, 'dead');
   }
 }
 
@@ -118,11 +134,13 @@ function gainXp(state, amount) {
     hero.xp -= R.xpToLevel(hero.level);
     hero.level += 1;
     state.prompts.push({ type: 'levelup', level: hero.level });
+    emit(state, 'levelup', { level: hero.level });
   }
 }
 
 /** Resolves a level-up prompt: +1 to one stat, full HP and Focus. */
 export function chooseStat(state, name) {
+  begin(state);
   if (mode(state) !== 'levelup' || !R.STATS.includes(name)) return state;
   const { level } = state.prompts.shift();
   const { hero } = state;
@@ -132,15 +150,17 @@ export function chooseStat(state, name) {
   hero.hp = maxHp(state);
   hero.focus = maxFocus(state);
   say(state, `Level ${level}: +1 ${name}.`);
+  emit(state, 'stat', { stat: name, skill: unlock > 0 ? hero.skills.at(-1) : null });
   return state;
 }
 
 export function drinkPotion(state) {
+  begin(state);
   const m = mode(state);
   if ((m !== 'explore' && m !== 'combat') || state.hero.potions < 1) return state;
   if (state.hero.hp >= maxHp(state)) return state;
   state.hero.potions -= 1;
-  say(state, `You drink a potion: +${heal(state, R.POTION_HEAL)} HP.`);
+  say(state, `You drink a potion: +${heal(state, R.POTION_HEAL, 'potion')} HP.`);
   return state;
 }
 
@@ -247,10 +267,12 @@ export function canMove(state, k) {
 }
 
 export function move(state, k) {
+  begin(state);
   if (!canMove(state, k)) return state;
   state.prev = state.pos;
   state.pos = k;
   visit(state, k);
+  emit(state, 'move', { from: state.prev, to: k });
   enterRoom(state, state.rooms[k]);
   return state;
 }
@@ -262,10 +284,12 @@ function enterRoom(state, room) {
       state.combat = { fight: { attack: 0, defense: 0, dmg: 0, poison: 0, ward: 0 } };
       state.tally.fights += 1;
       say(state, `${cap(a(room.enemy.name))} blocks the way.`);
+      emit(state, 'encounter', { boss: room.enemy.boss });
       break;
     case 'chest':
       room.kind = 'empty';
       say(state, 'You open a chest.');
+      emit(state, 'chest');
       rollLoot(state);
       break;
     case 'trap': {
@@ -281,6 +305,7 @@ function enterRoom(state, room) {
         checks: [{ label: 'Spot', parts: [['Wits', wits]], total: die + wits, target, targetLabel: 'Trap', ok }],
         taken: ok ? 0 : R.trapDamage(state.floor),
       });
+      emit(state, 'trap', { ok });
       if (ok) say(state, 'You spot a trap and disarm it.');
       else {
         say(state, `A trap springs: −${state.roll.taken} HP.`);
@@ -293,6 +318,7 @@ function enterRoom(state, room) {
       state.hero.hp = maxHp(state);
       state.hero.focus = maxFocus(state);
       say(state, 'A shrine restores your HP and Focus.');
+      emit(state, 'shrine');
       break;
     case 'stairs':
       say(state, 'Stairs lead down.');
@@ -301,9 +327,11 @@ function enterRoom(state, room) {
 }
 
 export function descend(state) {
+  begin(state);
   if (mode(state) !== 'explore' || state.rooms[state.pos].kind !== 'stairs') return state;
   enterFloor(state, state.floor + 1);
   say(state, `You descend to floor ${state.floor}.`);
+  emit(state, 'descend', { floor: state.floor });
   return state;
 }
 
@@ -314,6 +342,7 @@ export function enemy(state) {
 }
 
 function leaveFight(state) {
+  emit(state, 'escape', { from: state.pos, to: state.prev });
   state.combat = null;
   state.pos = state.prev;
   state.prev = null;
@@ -344,8 +373,10 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
     damage = (1 + dmg + fight.dmg) * (crit ? 2 : 1);
     foe.hp = Math.max(0, foe.hp - damage);
     say(state, `${crit ? 'Critical! ' : ''}You hit the ${foe.name} for ${damage}.`);
+    emit(state, 'hit', { damage, crit });
   } else {
     say(state, 'You miss.');
+    emit(state, 'miss');
   }
   let guard = blocked ? 'blocked' : 'hurt';
   if (!blocked && foe.hp > 0 && fight.ward > 0) {
@@ -353,8 +384,13 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
     guard = 'warded';
   }
   if (foe.hp === 0) guard = 'none';
-  else if (guard === 'blocked') say(state, `You block the ${foe.name}.`);
-  else if (guard === 'warded') say(state, `Your ward stops the ${foe.name}.`);
+  else if (guard === 'blocked') {
+    say(state, `You block the ${foe.name}.`);
+    emit(state, 'block');
+  } else if (guard === 'warded') {
+    say(state, `Your ward stops the ${foe.name}.`);
+    emit(state, 'ward');
+  }
   else say(state, `The ${foe.name} hits you for ${foe.dmg}.`);
 
   record(state, {
@@ -372,6 +408,7 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   if (!state.over && foe.hp > 0 && fight.poison) {
     foe.hp = Math.max(0, foe.hp - fight.poison);
     say(state, `Poison: the ${foe.name} loses ${fight.poison}.`);
+    emit(state, 'poison', { damage: fight.poison });
   }
   if (!state.over && foe.hp === 0) win(state, foe);
   return state;
@@ -383,9 +420,11 @@ function win(state, foe) {
   room.enemy = null;
   state.combat = null;
   state.tally.kills += 1;
+  emit(state, 'kill', { at: state.pos, boss: foe.boss, elite: foe.elite });
   if (foe.boss) {
     state.over = 'won';
     say(state, `The ${foe.name} falls. You win!`);
+    emit(state, 'won');
     return;
   }
   say(state, `The ${foe.name} dies. +${foe.xp} XP.`);
@@ -394,21 +433,24 @@ function win(state, foe) {
 }
 
 export function attack(state) {
+  begin(state);
   if (mode(state) !== 'combat') return state;
   return strike(state);
 }
 
 export function useSkill(state, id) {
+  begin(state);
   const { hero } = state;
   if (mode(state) !== 'combat' || !hero.skills.includes(id) || hero.focus < 1) return state;
   const skill = R.SKILLS[id];
   hero.focus -= 1;
+  emit(state, 'skill', { id });
   if (skill.escape) {
     say(state, `${skill.name}: you slip away.`);
     leaveFight(state);
     return state;
   }
-  if (skill.heal) say(state, `${skill.name}: +${heal(state, skill.heal)} HP.`);
+  if (skill.heal) say(state, `${skill.name}: +${heal(state, skill.heal, 'skill')} HP.`);
   else say(state, `${skill.name}!`);
   for (const [k, v] of Object.entries(skill.fight ?? {})) state.combat.fight[k] += v;
   return strike(state, skill.roll, skill.name);
@@ -416,6 +458,7 @@ export function useSkill(state, id) {
 
 /** Roll + Grit must meet the foe's Attack to get away. Fail and it hits you. */
 export function flee(state) {
+  begin(state);
   if (mode(state) !== 'combat') return state;
   const foe = enemy(state);
   const die = d6(state);
@@ -457,6 +500,7 @@ function rollLoot(state) {
   const die = d6(state);
   const found = R.LOOT_TABLE[die - 1];
   record(state, { kind: 'loot', die, found });
+  emit(state, 'loot', { found });
   if (found === 'potion') {
     if (state.hero.potions < R.MAX_POTIONS) {
       state.hero.potions += 1;
@@ -474,6 +518,7 @@ function rollLoot(state) {
 
 /** Equips the offered item, replacing whatever was in its slot. */
 export function takeLoot(state) {
+  begin(state);
   if (mode(state) !== 'loot') return state;
   const { item } = state.prompts.shift();
   const { hero } = state;
@@ -481,12 +526,15 @@ export function takeLoot(state) {
   hero.gear[item.slot] = item;
   hero.focus = Math.max(0, Math.min(maxFocus(state), hero.focus + maxFocus(state) - focusBefore));
   say(state, `You equip the ${item.name}.`);
+  emit(state, 'equip', { slot: item.slot });
   return state;
 }
 
 export function leaveLoot(state) {
+  begin(state);
   if (mode(state) !== 'loot') return state;
   const { item } = state.prompts.shift();
   say(state, `You leave the ${item.name}.`);
+  emit(state, 'discard');
   return state;
 }
