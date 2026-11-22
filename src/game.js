@@ -4,6 +4,7 @@
 import * as R from './rules.js';
 
 const LOG_SIZE = 40;
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 // ---------- the die ----------
 
@@ -82,6 +83,8 @@ export function newGame(classId, seed = Date.now()) {
   say(state, `You enter the dungeon as a ${cls.name}.`);
   return state;
 }
+
+const a = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
 
 function say(state, text) {
   state.log.push(text);
@@ -258,7 +261,7 @@ function enterRoom(state, room) {
     case 'boss':
       state.combat = { fight: { attack: 0, defense: 0, dmg: 0, poison: 0, ward: 0 } };
       state.tally.fights += 1;
-      say(state, `A ${room.enemy.name} blocks the way.`);
+      say(state, `${cap(a(room.enemy.name))} blocks the way.`);
       break;
     case 'chest':
       room.kind = 'empty';
@@ -275,12 +278,12 @@ function enterRoom(state, room) {
         kind: 'trap',
         die,
         checks: [{ label: 'Spot', parts: [['Wits', wits]], total: die + wits, target, targetLabel: 'Trap', ok }],
+        taken: ok ? 0 : R.trapDamage(state.floor),
       });
       if (ok) say(state, 'You spot a trap and step around it.');
       else {
-        const dmg = R.trapDamage(state.floor);
-        say(state, `A trap springs: −${dmg} HP.`);
-        hurt(state, dmg);
+        say(state, `A trap springs: −${state.roll.taken} HP.`);
+        hurt(state, state.roll.taken);
       }
       break;
     }
@@ -315,8 +318,6 @@ function leaveFight(state) {
   state.prev = null;
 }
 
-const statLabel = (name) => name[0].toUpperCase() + name.slice(1);
-
 /**
  * One round, one die. The roll is checked twice: plus Might (or the skill's
  * stat) against the foe's Defense, and plus Grit against the foe's Attack.
@@ -333,7 +334,7 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   const hit = crit || passes(die, die + hitBase + bonus, defense);
   const blocked = passes(die, die + grit, attack);
 
-  const hitParts = [[statLabel(hitStat), hitBase]];
+  const hitParts = [[cap(hitStat), hitBase]];
   if (bonus) hitParts.push([label, bonus]);
   state.tally.rounds += 1;
 
@@ -360,9 +361,10 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
     die,
     checks: [
       { label: 'Hit', parts: hitParts, total: die + hitBase + bonus, target: defense, targetLabel: 'Defense', ok: hit, crit },
-      { label: 'Block', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok: guard !== 'hurt', skipped: guard === 'none' },
+      { label: 'Block', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok: guard !== 'hurt', ward: guard === 'warded', skipped: guard === 'none' },
     ],
     damage,
+    taken: guard === 'hurt' ? foe.dmg : 0,
   });
   if (guard === 'hurt') hurt(state, foe.dmg);
 
@@ -423,6 +425,7 @@ export function flee(state) {
     kind: 'flee',
     die,
     checks: [{ label: 'Flee', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok }],
+    taken: ok ? 0 : foe.dmg,
   });
   if (ok) {
     say(state, `You flee from the ${foe.name}.`);
@@ -464,7 +467,7 @@ function rollLoot(state) {
   }
   const slot = found === 'rare' ? onTable(state, R.SLOT_TABLE) : found;
   const item = makeItem(state, slot, found === 'rare');
-  say(state, `You find ${item.rare ? 'a rare ' : 'a '}${item.name}.`);
+  say(state, `You find ${a(item.rare ? `rare ${item.name}` : item.name)}.`);
   state.prompts.push({ type: 'loot', item });
 }
 
