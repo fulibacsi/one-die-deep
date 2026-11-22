@@ -221,6 +221,27 @@ test('each action lists what it caused, in order, and only that', () => {
   assert.deepEqual(t.events, [{ type: 'stat', stat: 'might', skill: R.CLASSES.warrior.skills[1] }]);
 });
 
+test('log lines read correctly for armor names and for the boss', () => {
+  const s = G.newGame('warrior', 13);
+  const next = G.neighbors(s, s.pos)[0];
+  Object.assign(s.rooms[next], { kind: 'chest', enemy: null });
+  forceRoll(s, R.LOOT_TABLE.indexOf('armor') + 1);
+  G.move(s, next);
+  assert.equal(s.log.at(-1), `Loot: ${R.SLOTS.armor.names[0]}.`);
+
+  const t = G.newGame('warrior', 13);
+  const lair = G.neighbors(t, t.pos)[0];
+  Object.assign(t.rooms[lair], { kind: 'boss', enemy: { ...R.BOSS, maxHp: R.BOSS.hp, xp: 0, elite: false, boss: true } });
+  G.move(t, lair);
+  assert.equal(t.log.at(-1), 'The Hollow King blocks the way.');
+  forceRoll(t, 6);
+  G.attack(t);
+  assert.deepEqual(t.log.slice(-2), ['Critical! You hit the Hollow King for 2.', 'You block the Hollow King.']);
+  forceRoll(t, 1);
+  G.attack(t);
+  assert.equal(t.log.at(-1), 'The Hollow King hits you for 2.');
+});
+
 test('running out of HP ends the run', () => {
   const s = forceRoll(fight({ dmg: 99 }), 1);
   G.attack(s);

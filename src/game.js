@@ -88,7 +88,10 @@ export function newGame(classId, seed = Date.now()) {
   return state;
 }
 
-const a = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
+// Articles for names in the log. A name that already starts with "The"
+// (the boss) keeps it: "the Hollow King", never "a The Hollow King".
+const the = (name) => (name.startsWith('The ') ? `the ${name.slice(4)}` : `the ${name}`);
+const a = (name) => (name.startsWith('The ') ? the(name) : /^[aeiou]/i.test(name) ? `an ${name}` : `a ${name}`);
 
 function emit(state, type, data) {
   state.events.push({ type, ...data });
@@ -372,7 +375,7 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   if (hit) {
     damage = (1 + dmg + fight.dmg) * (crit ? 2 : 1);
     foe.hp = Math.max(0, foe.hp - damage);
-    say(state, `${crit ? 'Critical! ' : ''}You hit the ${foe.name} for ${damage}.`);
+    say(state, `${crit ? 'Critical! ' : ''}You hit ${the(foe.name)} for ${damage}.`);
     emit(state, 'hit', { damage, crit });
   } else {
     say(state, 'You miss.');
@@ -385,13 +388,13 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   }
   if (foe.hp === 0) guard = 'none';
   else if (guard === 'blocked') {
-    say(state, `You block the ${foe.name}.`);
+    say(state, `You block ${the(foe.name)}.`);
     emit(state, 'block');
   } else if (guard === 'warded') {
-    say(state, `Your ward stops the ${foe.name}.`);
+    say(state, `Your ward stops ${the(foe.name)}.`);
     emit(state, 'ward');
   }
-  else say(state, `The ${foe.name} hits you for ${foe.dmg}.`);
+  else say(state, `${cap(the(foe.name))} hits you for ${foe.dmg}.`);
 
   record(state, {
     kind: 'attack',
@@ -407,7 +410,7 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
 
   if (!state.over && foe.hp > 0 && fight.poison) {
     foe.hp = Math.max(0, foe.hp - fight.poison);
-    say(state, `Poison: the ${foe.name} loses ${fight.poison}.`);
+    say(state, `Poison: ${the(foe.name)} loses ${fight.poison}.`);
     emit(state, 'poison', { damage: fight.poison });
   }
   if (!state.over && foe.hp === 0) win(state, foe);
@@ -423,11 +426,11 @@ function win(state, foe) {
   emit(state, 'kill', { at: state.pos, boss: foe.boss, elite: foe.elite });
   if (foe.boss) {
     state.over = 'won';
-    say(state, `The ${foe.name} falls. You win!`);
+    say(state, `${cap(the(foe.name))} falls. You win!`);
     emit(state, 'won');
     return;
   }
-  say(state, `The ${foe.name} dies. +${foe.xp} XP.`);
+  say(state, `${cap(the(foe.name))} dies. +${foe.xp} XP.`);
   gainXp(state, foe.xp);
   if (foe.elite) rollLoot(state);
 }
@@ -472,10 +475,10 @@ export function flee(state) {
     taken: ok ? 0 : foe.dmg,
   });
   if (ok) {
-    say(state, `You flee from the ${foe.name}.`);
+    say(state, `You flee from ${the(foe.name)}.`);
     leaveFight(state);
   } else {
-    say(state, `You fail to flee. The ${foe.name} hits you for ${foe.dmg}.`);
+    say(state, `You fail to flee. ${cap(the(foe.name))} hits you for ${foe.dmg}.`);
     hurt(state, foe.dmg);
   }
   return state;
@@ -512,7 +515,7 @@ function rollLoot(state) {
   }
   const slot = found === 'rare' ? onTable(state, R.SLOT_TABLE) : found;
   const item = makeItem(state, slot, found === 'rare');
-  say(state, `You find ${a(item.rare ? `rare ${item.name}` : item.name)}.`);
+  say(state, `${item.rare ? 'Rare loot' : 'Loot'}: ${item.name}.`);
   state.prompts.push({ type: 'loot', item });
 }
 
