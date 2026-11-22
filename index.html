@@ -37,8 +37,10 @@
 }
 
 * { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 [hidden] { display: none !important; }
 body {
+  margin: 0;
   background-color: var(--paper);
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
@@ -221,6 +223,113 @@ button { font: inherit; color: inherit; }
 .log { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1.5px solid var(--line); display: grid; gap: 4px; font-size: 13px; }
 .log li { color: var(--ink-soft); }
 .log li:first-child { color: var(--ink); }
+.kit-head, .kit-log, #details { display: none; }
+
+/* Touch screens: show where you can move, and drop keyboard hints. */
+@media (hover: none) {
+  .map-wrap .reach .room { stroke: var(--hero); }
+}
+@media (pointer: coarse) {
+  .btn kbd { display: none; }
+}
+
+/* ---------- phone, portrait: one screen, no scrolling while you play ----------
+   Vitals strip on top, the map takes whatever height is left, the encounter
+   and its buttons sit at the bottom in thumb reach. Gear, skill text and the
+   full log open as a bottom sheet from the Hero button. */
+@media (max-width: 700px) and (orientation: portrait) {
+  html, body { height: 100%; }
+  .app.playing { height: 100%; padding-block: 8px; gap: 8px; grid-template-rows: auto minmax(0, 1fr); font-size: 14px; }
+  .playing .top { flex-wrap: nowrap; gap: 6px; }
+  .playing .title { font-size: 20px; white-space: nowrap; }
+  .playing .wide-only { display: none; }
+  .playing .depth { gap: 0; }
+  .playing .depth > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .playing .depth-steps i { width: 9px; height: 9px; }
+  .playing .top .btn { min-height: 32px; padding: 4px 9px; font-size: 13px; }
+  .playing #details { display: inline-flex; }
+  .playing #screen { min-height: 0; }
+
+  .board { height: 100%; gap: 8px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(120px, 1fr) auto; grid-template-areas: "vitals" "map" "panel"; }
+
+  .vitals {
+    padding: 8px 12px; gap: 6px 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "who stats" "hp hp" "focus xp";
+  }
+  /* Each bar on one line: label, pips, number. */
+  .vitals .track { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+  .vitals .track-head { display: contents; }
+  .vitals .track .label { grid-column: 1; }
+  .vitals .track .segs, .vitals .track .xpbar { grid-column: 2; grid-row: 1; }
+  .vitals .track .num { grid-column: 3; font-size: 13px; }
+  .vitals .stats { justify-self: end; }
+  .vitals .who { grid-area: who; gap: 8px; }
+  .vitals .who svg { width: 26px; height: 26px; }
+  .vitals .who-name { font-size: 15px; }
+  .vitals .stats { grid-area: stats; grid-template-columns: repeat(3, auto); gap: 4px; align-self: center; }
+  .vitals .stats div { padding: 1px 6px; }
+  .vitals .stats dt { font-size: 9px; }
+  .vitals .stats dd { font-size: 16px; }
+  .t-hp { grid-area: hp; } .t-focus { grid-area: focus; } .t-xp { grid-area: xp; align-self: start; }
+  .vitals .segs i { height: 11px; }
+  .vitals .segs.focus i { width: 10px; height: 10px; }
+
+  .map-area { min-height: 0; height: 100%; }
+  .map-wrap { height: 100%; max-width: none; aspect-ratio: auto; }
+
+  .panel { padding: 10px 12px; gap: 8px; }
+  .panel h2 { font-size: 17px; }
+  .foe-card { gap: 4px; }
+  .foe-stats { gap: 10px; }
+  .foe-stats span { font-size: 12px; }
+  .foe-stats b { font-size: 14px; }
+  .roll { gap: 6px; }
+  .roll-top { gap: 12px; }
+  .die { width: 52px; height: 52px; padding: 7px; border-radius: 10px; border-width: 2px; }
+  .die i { width: 9px; height: 9px; }
+  .verdict { font-size: 15px; }
+  .check { grid-template-columns: 44px minmax(0, 1fr); }
+  .check .math { font-size: 11px; }
+  .table6 { font-size: 12px; gap: 0; }
+  .table6 div { padding: 1px 6px; }
+  .note { font-size: 12px; }
+  .actions { gap: 6px; }
+  .actions .row { gap: 6px; }
+  .actions .btn { min-height: 44px; }
+  /* Combat: Attack, Flee and Potion share a row; skills go below. */
+  .mode-combat .actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "main aux" "skills skills"; }
+  .main-row { grid-area: main; } .aux-row { grid-area: aux; flex-wrap: nowrap; } .skill-row { grid-area: skills; flex-wrap: nowrap; }
+  .aux-row .btn, .skill-row .btn { flex: 1 1 0; min-width: 0; padding-inline: 8px; }
+  /* Loot and level-up already say what happened; the old roll can go. */
+  .mode-levelup .roll, .mode-loot .roll { display: none; }
+  .table6 { display: none; }
+  .skill-btn { padding: 6px 10px; }
+  .skill-btn span:not(.cost) { display: none; }
+  .choice { gap: 6px; }
+  .choice .btn { padding: 6px 12px; min-height: 40px; flex-direction: row; justify-content: space-between; align-items: center; gap: 10px; }
+  .choice .btn b { white-space: nowrap; }
+  .choice .btn span { font-size: 12px; text-align: right; }
+  .item { padding: 6px 10px; }
+  .panel .log { padding-top: 6px; }
+  .panel .log li:not(:first-child) { display: none; }
+
+  .kit { display: none; }
+  .board.show-kit .kit {
+    display: grid; position: fixed; z-index: 20; inset: auto 0 0 0; max-height: 78%; overflow: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    border-width: 1.5px 0 0; box-shadow: 0 -12px 32px rgb(0 0 0 / 0.25);
+  }
+  .kit-head { display: flex; justify-content: space-between; align-items: center; }
+  .kit-log { display: grid; gap: 4px; }
+}
+/* Short phones (iPhone SE and the like): keep the verdict, drop the math
+   and the log line; both stay in the Hero sheet's log. */
+@media (max-width: 700px) and (orientation: portrait) and (max-height: 600px) {
+  .playing .checks, .playing .panel .log { display: none; }
+  .playing .mode-explore .note { display: none; }
+}
 
 /* ---------- motion: one-shot effects picked by ui.js from the last action ---------- */
 .track, .foe-card { position: relative; }
@@ -309,8 +418,9 @@ button { font: inherit; color: inherit; }
     <h1 class="title">One Die Deep</h1>
     <div class="depth" id="depth"></div>
     <div class="spacer"></div>
+    <button class="btn ghost" id="details" type="button" aria-controls="kit" aria-expanded="false">Hero</button>
     <button class="btn ghost" id="sound" type="button" aria-pressed="true">Sound on</button>
-    <button class="btn ghost" id="new-run" type="button" hidden>New run</button>
+    <button class="btn ghost" id="new-run" type="button" hidden>New<span class="wide-only">run</span></button>
   </header>
   <main id="screen"></main>
 </div>

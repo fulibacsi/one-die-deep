@@ -9,11 +9,14 @@ const screen = document.getElementById('screen');
 const depthEl = document.getElementById('depth');
 const newRunBtn = document.getElementById('new-run');
 const soundBtn = document.getElementById('sound');
+const kitBtn = document.getElementById('details');
+const app = document.querySelector('.app');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let state = null;
 let picking = true;
 let busy = false;
+let kitOpen = false; // the gear sheet on phones
 
 // What the last action changed, read once by the next render to pick
 // one-shot animations: { before: snapshot(), events } or { arrive: true }.
@@ -230,14 +233,16 @@ function renderSheet() {
   const leveled = happened('levelup').length ? ' pulse' : '';
   return `<aside class="sheet box vitals${hurtBy ? ' shake' : ''}" aria-label="Your hero">
     <div class="who">${heroIcon(classId, 40)}<div><div class="who-name">${cls.name}</div><div class="label${leveled}">Level ${hero.level}</div></div></div>
-    <div class="track"><div class="track-head"><span class="label">HP</span><span class="num">${hero.hp} / ${G.maxHp(state)}</span></div>${segs('hp', hero.hp, G.maxHp(state), hpBefore)}${floats}</div>
-    <div class="track"><div class="track-head"><span class="label">Focus</span><span class="num">${hero.focus} / ${G.maxFocus(state)}</span></div>${segs('focus', hero.focus, G.maxFocus(state))}</div>
-    <div class="track"><div class="track-head"><span class="label">XP</span><span class="num">${hero.xp} / ${need}</span></div><div class="xpbar"><b style="width:${(100 * hero.xp) / need}%"></b></div></div>
+    <div class="track t-hp"><div class="track-head"><span class="label">HP</span><span class="num">${hero.hp} / ${G.maxHp(state)}</span></div>${segs('hp', hero.hp, G.maxHp(state), hpBefore)}${floats}</div>
+    <div class="track t-focus"><div class="track-head"><span class="label">Focus</span><span class="num">${hero.focus} / ${G.maxFocus(state)}</span></div>${segs('focus', hero.focus, G.maxFocus(state))}</div>
+    <div class="track t-xp"><div class="track-head"><span class="label">XP</span><span class="num">${hero.xp} / ${need}</span></div><div class="xpbar"><b style="width:${(100 * hero.xp) / need}%"></b></div></div>
     <dl class="stats">${stats}</dl>
   </aside>
-  <aside class="sheet box kit" aria-label="Gear and skills">
+  <aside class="sheet box kit" id="kit" aria-label="Gear, skills and log">
+    <div class="kit-head"><span class="label">Gear and skills</span><button class="btn ghost" type="button" data-act="close-kit">Close</button></div>
     <ul class="list">${gear}<li><span class="label">potions</span><span class="num">${hero.potions} / ${R.MAX_POTIONS}</span></li></ul>
     <ul class="list skills">${skills}</ul>
+    <div class="kit-log"><span class="label">Log</span><ul class="log">${state.log.slice(-12).reverse().map((line) => `<li>${esc(line)}</li>`).join('')}</ul></div>
   </aside>`;
 }
 
@@ -292,7 +297,7 @@ function rollHtml(roll) {
 function potionButton() {
   const { hero } = state;
   const ok = hero.potions > 0 && hero.hp < G.maxHp(state);
-  return `<button class="btn" type="button" data-act="potion" ${ok ? '' : 'disabled'}>Potion ×${hero.potions} <span class="muted">+${R.POTION_HEAL} HP</span> <kbd>P</kbd></button>`;
+  return `<button class="btn" type="button" data-act="potion" ${ok ? '' : 'disabled'}>Potion ×${hero.potions} <span class="muted wide-only">+${R.POTION_HEAL} HP</span> <kbd>P</kbd></button>`;
 }
 
 function combatHtml() {
@@ -323,9 +328,9 @@ function combatHtml() {
       ${fight.dmg ? `<p class="note">Your hits deal +${fight.dmg}.</p>` : ''}
     </div>`,
     actions: `<div class="actions">
-      <div class="row"><button class="btn primary" type="button" data-act="attack">Attack <kbd>Space</kbd></button></div>
-      ${skills ? `<div class="row">${skills}</div>` : ''}
-      <div class="row"><button class="btn" type="button" data-act="flee" title="Roll + Grit must meet the foe's Attack">Flee <kbd>F</kbd></button>${potionButton()}</div>
+      <div class="row main-row"><button class="btn primary" type="button" data-act="attack">Attack <kbd>Space</kbd></button></div>
+      ${skills ? `<div class="row skill-row">${skills}</div>` : ''}
+      <div class="row aux-row"><button class="btn" type="button" data-act="flee" title="Roll + Grit must meet the foe's Attack">Flee <kbd>F</kbd></button>${potionButton()}</div>
     </div>`,
   };
 }
@@ -403,7 +408,7 @@ function renderPanel() {
   // A new situation (fight, loot, level-up, ...) slides in.
   const enter = fx?.before && fx.before.mode !== m ? ' enter' : '';
   const celebrate = m === 'levelup' && enter ? ' celebrate' : '';
-  return `<section class="panel box${celebrate}" aria-label="Encounter"><div class="${enter.trim()}">${head}</div>${rollHtml(state.roll)}<div class="${enter.trim()}">${actions}</div><ul class="log" aria-live="polite">${log}</ul></section>`;
+  return `<section class="panel box mode-${m}${celebrate}" aria-label="Encounter"><div class="${enter.trim()}">${head}</div>${rollHtml(state.roll)}<div class="${enter.trim()}">${actions}</div><ul class="log" aria-live="polite">${log}</ul></section>`;
 }
 
 // ---------- screens ----------
@@ -451,6 +456,9 @@ function renderStart() {
 function render() {
   const inRun = state && !picking;
   newRunBtn.hidden = !inRun;
+  app.classList.toggle('playing', Boolean(inRun));
+  if (!inRun) kitOpen = false;
+  kitBtn.setAttribute('aria-expanded', String(kitOpen));
   renderDepth();
   if (!inRun) {
     screen.innerHTML = renderStart();
@@ -459,7 +467,7 @@ function render() {
   const hurt = happened('hurt').reduce((n, e) => n + e.amount, 0);
   const shake = hurt >= 2 ? ' shake-hard' : hurt ? ' shake-soft' : '';
   const arrive = fx?.arrive || happened('descend').length ? ' arriving' : '';
-  screen.innerHTML = `<div class="board${shake}">${renderSheet()}<section class="map-area" aria-label="Dungeon map"><div class="map-wrap${arrive}">${renderMap()}</div></section>${renderPanel()}</div>`;
+  screen.innerHTML = `<div class="board${shake}${kitOpen ? ' show-kit' : ''}">${renderSheet()}<section class="map-area" aria-label="Dungeon map"><div class="map-wrap${arrive}">${renderMap()}</div></section>${renderPanel()}</div>`;
   fx = null;
 }
 
@@ -530,6 +538,7 @@ screen.addEventListener('click', (e) => {
   if (!el) return;
   const { act: name, room, class: classId, skill, stat } = el.dataset;
   if (classId) start(classId);
+  else if (name === 'close-kit') toggleKit(false);
   else if (name === 'resume') {
     picking = false;
     render();
@@ -538,6 +547,14 @@ screen.addEventListener('click', (e) => {
   else if (skill) act((s) => G.useSkill(s, skill));
   else if (stat) act((s) => G.chooseStat(s, stat));
 });
+
+function toggleKit(open = !kitOpen) {
+  kitOpen = open;
+  kitBtn.setAttribute('aria-expanded', String(kitOpen));
+  document.querySelector('.board')?.classList.toggle('show-kit', kitOpen);
+  if (kitOpen) document.querySelector('#kit .btn')?.focus();
+}
+kitBtn.addEventListener('click', () => toggleKit());
 
 newRunBtn.addEventListener('click', () => {
   picking = true;
@@ -548,8 +565,13 @@ newRunBtn.addEventListener('click', () => {
 for (const type of ['pointerdown', 'keydown']) document.addEventListener(type, () => S.unlock(), { capture: true });
 
 function renderSound() {
-  soundBtn.setAttribute('aria-pressed', String(!S.isMuted()));
-  soundBtn.textContent = S.isMuted() ? 'Sound off' : 'Sound on';
+  const on = !S.isMuted();
+  const waves = on
+    ? '<path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+    : '<path d="M11 5.5l4 5M15 5.5l-4 5" stroke="currentColor" stroke-width="1.6"/>';
+  soundBtn.setAttribute('aria-pressed', String(on));
+  soundBtn.setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+  soundBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor"/>${waves}</svg><span class="wide-only">${on ? 'Sound on' : 'Sound off'}</span>`;
 }
 soundBtn.addEventListener('click', () => {
   S.setMuted(!S.isMuted());
@@ -561,6 +583,11 @@ const MOVES = { ArrowUp: [0, -1], ArrowRight: [1, 0], ArrowDown: [0, 1], ArrowLe
 
 document.addEventListener('keydown', (e) => {
   if (!state || picking || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (kitOpen && e.key === 'Escape') {
+    toggleKit(false);
+    kitBtn.focus();
+    return;
+  }
   const m = G.mode(state);
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const room = e.target.closest?.('[data-room]');
