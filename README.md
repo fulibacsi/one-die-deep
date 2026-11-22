@@ -30,7 +30,7 @@ F flees, P drinks a potion, D descends, E / L equip or leave loot.
 - **HP** comes from your class plus 2 per level, so the sheet holds only three stats.
 - **Classes.** Each class has three skills, learned at levels 1, 2 and 4.
   - Warrior (12 HP, Might 2, Grit 3, Wits 1): Smash, Rally, Berserk.
-  - Rogue (9 HP, Might 3, Grit 2, Wits 2): Backstab, Vanish, Poison.
+  - Rogue (8 HP, Might 2, Grit 3, Wits 2): Backstab, Vanish, Poison.
   - Mage (10 HP, Might 2, Grit 2, Wits 4): Firebolt, Frost, Ward. Spells hit with Wits.
 - **Level-up:** +1 to a stat of your choice, HP and Focus refill.
 - **Dungeon:** six floors of nine rooms on a 5×5 grid. Rooms next to you are

@@ -23,7 +23,7 @@ const WANTS = {
   rally: (s) => s.hero.hp <= G.maxHp(s) - 4,
   berserk: (s, foe) => foe.hp >= 4 && s.combat.fight.dmg === 0,
   backstab: (s, foe) => foe.hp >= 2,
-  vanish: (s, foe) => s.hero.hp <= foe.dmg && s.hero.potions === 0,
+  vanish: (s, foe) => foe.hp >= 2,
   poison: (s, foe) => foe.hp >= 3 && s.combat.fight.poison === 0,
   firebolt: () => true,
   frost: (s, foe) => foe.hp >= 3 && s.combat.fight.attack === 0,

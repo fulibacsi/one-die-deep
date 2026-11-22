@@ -355,7 +355,8 @@ function leaveFight(state) {
  * One round, one die. The roll is checked twice: plus Might (or the skill's
  * stat) against the foe's Defense, and plus Grit against the foe's Attack.
  */
-function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0 } = {}, label) {
+function strike(state, roll = {}, label) {
+  const { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0, safe = false, critOnHit = false } = roll;
   const foe = enemy(state);
   const { fight } = state.combat;
   const die = d6(state);
@@ -363,9 +364,9 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   const grit = stat(state, 'grit');
   const defense = foe.defense + fight.defense;
   const attack = foe.attack + fight.attack;
-  const crit = die >= critOn;
-  const hit = crit || passes(die, die + hitBase + bonus, defense);
-  const blocked = passes(die, die + grit, attack);
+  const hit = die >= critOn || passes(die, die + hitBase + bonus, defense);
+  const crit = die >= critOn || (critOnHit && hit);
+  const blocked = safe || passes(die, die + grit, attack);
 
   const hitParts = [[cap(hitStat), hitBase]];
   if (bonus) hitParts.push([label, bonus]);
@@ -401,7 +402,7 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
     die,
     checks: [
       { label: 'Hit', parts: hitParts, total: die + hitBase + bonus, target: defense, targetLabel: 'Defense', ok: hit, crit },
-      { label: 'Block', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok: guard !== 'hurt', ward: guard === 'warded', skipped: guard === 'none' },
+      { label: 'Block', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok: guard !== 'hurt', ward: guard === 'warded', safe: safe ? label : null, skipped: guard === 'none' },
     ],
     damage,
     taken: guard === 'hurt' ? foe.dmg : 0,
@@ -448,11 +449,6 @@ export function useSkill(state, id) {
   const skill = R.SKILLS[id];
   hero.focus -= 1;
   emit(state, 'skill', { id });
-  if (skill.escape) {
-    say(state, `${skill.name}: you slip away.`);
-    leaveFight(state);
-    return state;
-  }
   if (skill.heal) say(state, `${skill.name}: +${heal(state, skill.heal, 'skill')} HP.`);
   else say(state, `${skill.name}!`);
   for (const [k, v] of Object.entries(skill.fight ?? {})) state.combat.fight[k] += v;

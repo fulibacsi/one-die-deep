@@ -263,7 +263,8 @@ function checkHtml(die, c) {
   const met = c.total >= c.target;
   const natural = (die === 1 && met) || (die === 6 && !met) ? `, but a ${die} always ${die === 6 ? 'succeeds' : 'fails'}` : '';
   const ward = c.ward ? ', Ward stops it' : '';
-  return `<div class="check ${c.ok ? 'ok' : 'no'}"><span class="label">${c.label}</span><span class="math">${die}${parts} = ${c.total} ${met ? '≥' : '<'} ${c.targetLabel} ${c.target}${natural}${ward}</span></div>`;
+  const safe = c.safe && !met ? `, ${esc(c.safe)} keeps you safe` : '';
+  return `<div class="check ${c.ok ? 'ok' : 'no'}"><span class="label">${c.label}</span><span class="math">${die}${parts} = ${c.total} ${met ? '≥' : '<'} ${c.targetLabel} ${c.target}${natural}${ward}${safe}</span></div>`;
 }
 
 // The headline of a roll: what happened, in two words or fewer per check.

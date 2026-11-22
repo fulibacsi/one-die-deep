@@ -119,14 +119,22 @@ test('Ward blocks hits and Poison ticks after each roll', () => {
   assert.equal(G.enemy(t).hp, 4);
 });
 
-test('Vanish and a successful flee return you to the room you came from', () => {
-  const s = fight({}, 'rogue');
-  const from = s.prev;
+test('Vanish: that roll cannot hurt you, even on a 1, and a hit crits', () => {
+  const s = forceRoll(fight({ attack: 20, hp: 5 }, 'rogue'), 1);
   s.hero.skills.push('vanish');
   G.useSkill(s, 'vanish');
-  assert.equal(G.mode(s), 'explore');
-  assert.equal(s.pos, from);
+  assert.equal(s.hero.hp, R.CLASSES.rogue.hp);
+  assert.equal(G.enemy(s).hp, 5, 'a 1 still misses');
 
+  const t = forceRoll(fight({ attack: 20, hp: 5 }, 'rogue'), 3);
+  t.hero.skills.push('vanish');
+  G.useSkill(t, 'vanish');
+  assert.equal(G.enemy(t).hp, 3, 'a hit deals double');
+  assert.deepEqual(t.events.map((e) => e.type), ['skill', 'hit', 'block']);
+  assert.equal(t.events[1].crit, true);
+});
+
+test('a successful flee returns you to the room you came from', () => {
   const t = forceRoll(fight(), 6);
   const back = t.prev;
   G.flee(t);

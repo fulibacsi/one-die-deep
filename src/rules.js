@@ -31,9 +31,9 @@ export const CLASSES = {
   },
   rogue: {
     name: 'Rogue',
-    blurb: 'Lands crits and slips away.',
-    hp: 9,
-    stats: { might: 3, grit: 2, wits: 2 },
+    blurb: 'Strikes from the shadows for crits.',
+    hp: 8,
+    stats: { might: 2, grit: 3, wits: 2 },
     skills: ['backstab', 'vanish', 'poison'],
   },
   mage: {
@@ -46,16 +46,16 @@ export const CLASSES = {
 };
 
 // A skill costs 1 Focus and changes the roll you make with it.
-// roll:   modifiers for this one roll (stat used to hit, bonus, critOn, dmg)
+// roll:   modifiers for this one roll (stat used to hit, bonus, critOn, dmg,
+//         safe: the block always succeeds, critOnHit: any hit is a crit)
 // fight:  modifiers that last until the fight ends (attack, defense, dmg, poison, ward)
 // heal:   HP restored before the roll
-// escape: leave the fight without rolling
 export const SKILLS = {
   smash: { name: 'Smash', text: '+2 to hit this roll. A hit deals 2.', roll: { bonus: 2, dmg: 1 } },
   rally: { name: 'Rally', text: 'Heal 4 HP, then attack.', heal: 4 },
   berserk: { name: 'Berserk', text: 'Your hits deal +1 for the rest of the fight.', fight: { dmg: 1 } },
   backstab: { name: 'Backstab', text: 'This roll crits on 4, 5 or 6.', roll: { critOn: 4 } },
-  vanish: { name: 'Vanish', text: 'Escape the fight. No roll.', escape: true },
+  vanish: { name: 'Vanish', text: 'This roll cannot hurt you, and a hit crits.', roll: { safe: true, critOnHit: true } },
   poison: { name: 'Poison', text: 'The foe loses 1 HP after every roll this fight.', fight: { poison: 1 } },
   firebolt: { name: 'Firebolt', text: 'Hit with Wits. A hit deals 2.', roll: { stat: 'wits', dmg: 1 } },
   frost: { name: 'Frost', text: 'Foe Attack −2 this fight. Hit with Wits.', fight: { attack: -2 }, roll: { stat: 'wits' } },
