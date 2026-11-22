@@ -505,11 +505,14 @@ function rollLoot(state) {
   record(state, { kind: 'loot', die, found });
   emit(state, 'loot', { found });
   if (found === 'potion') {
+    // A full belt means the potion is drunk on the spot. At full HP it is lost.
     if (state.hero.potions < R.MAX_POTIONS) {
       state.hero.potions += 1;
       say(state, 'You find a potion.');
+    } else if (state.hero.hp < maxHp(state)) {
+      say(state, `Your belt is full, so you drink the potion: +${heal(state, R.POTION_HEAL, 'potion')} HP.`);
     } else {
-      say(state, 'You find a potion, but your belt is full.');
+      say(state, 'Your belt and your HP are full. The potion is lost.');
     }
     return;
   }
