@@ -31,7 +31,12 @@ body { background: radial-gradient(circle at 50% 0%, var(--raised), var(--bg) 70
 .top h1 { letter-spacing: 0.12em; font-size: clamp(22px, 5vw, 32px); }
 
 .screen { min-height: 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "hud hud" "board panel"; }
-@media (max-width: 760px) { .screen { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "hud" "board" "panel"; overflow: auto; } }
+@media (max-width: 760px) {
+  .screen { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "hud" "board" "panel"; overflow: auto; }
+  /* A plain block here, so the 8x8 grid's 100% width is definite and its row
+     grows to fit it instead of the grid spilling over the panel below. */
+  .screen .board { display: block; min-height: auto; }
+}
 .hud { grid-area: hud; display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; padding: 10px 14px; }
 .hud .grow { flex: 1 1 140px; display: grid; gap: 4px; }
 .panel { grid-area: panel; display: grid; gap: 12px; align-content: start; align-self: start; }

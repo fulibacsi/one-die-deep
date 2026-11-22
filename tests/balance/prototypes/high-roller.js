@@ -1,8 +1,8 @@
 // HIGH ROLLER: does the meta-progression curve rise? Win rate by run number
 // for profiles that bank chips and buy the cheapest upgrade between runs.
 // Usage: node tests/balance/prototypes/high-roller.js [profiles, default 400] [runs, default 15]
-import * as H from '../../../prototypes/high-roller/engine.js';
-import { neighbors } from '../../../prototypes/shared/dice.js';
+import * as H from '../../../design/prototypes/high-roller/engine.js';
+import { neighbors } from '../../../design/prototypes/shared/dice.js';
 
 const profiles = Number(process.argv[2] ?? 400);
 const runsEach = Number(process.argv[3] ?? 15);

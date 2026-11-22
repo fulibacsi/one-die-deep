@@ -1,7 +1,7 @@
 // NETDIVE: how many dives a greedy bot needs to crack the Core.
 // Usage: node tests/balance/prototypes/netdive.js [profiles, default 300] [bias policy: 3|2|4|5]
-import * as N from '../../../prototypes/netdive/engine.js';
-import { neighbors } from '../../../prototypes/shared/dice.js';
+import * as N from '../../../design/prototypes/netdive/engine.js';
+import { neighbors } from '../../../design/prototypes/shared/dice.js';
 
 const profiles = Number(process.argv[2] ?? 300);
 const wantBias = Number(process.argv[3] ?? 3);

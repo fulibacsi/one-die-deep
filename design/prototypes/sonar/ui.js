@@ -1,6 +1,6 @@
 import * as S from './engine.js';
 import { dieHtml, spin } from '../shared/dice.js';
-import * as Snd from '../../src/sound.js';
+import * as Snd from '../../../src/sound.js';
 
 const screen = document.getElementById('screen');
 const soundBtn = document.getElementById('sound');

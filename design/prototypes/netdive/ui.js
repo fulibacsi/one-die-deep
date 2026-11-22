@@ -1,7 +1,7 @@
 import * as N from './engine.js';
 import { dieHtml, spin, store } from '../shared/dice.js';
 import { mapSvg, neighbors } from '../shared/map-view.js';
-import * as S from '../../src/sound.js';
+import * as S from '../../../src/sound.js';
 
 const SAVE = 'netdive:profile';
 const screen = document.getElementById('screen');

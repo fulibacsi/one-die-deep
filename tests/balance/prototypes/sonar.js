@@ -1,6 +1,6 @@
 // SONAR: does reading the echoes matter? A deducing bot against a blind one.
 // Usage: node tests/balance/prototypes/sonar.js [games, default 2000]
-import * as S from '../../../prototypes/sonar/engine.js';
+import * as S from '../../../design/prototypes/sonar/engine.js';
 
 const games = Number(process.argv[2] ?? 2000);
 Object.assign(S.RULES, JSON.parse(process.argv[3] ?? '{}'));
