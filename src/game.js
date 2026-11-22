@@ -284,7 +284,7 @@ function enterRoom(state, room) {
   switch (room.kind) {
     case 'monster':
     case 'boss':
-      state.combat = { fight: { attack: 0, defense: 0, dmg: 0, poison: 0, ward: 0 } };
+      state.combat = { fight: { attack: 0, defense: 0, dmg: 0, ward: 0, counter: 0 } };
       state.tally.fights += 1;
       say(state, `${cap(a(room.enemy.name))} blocks the way.`);
       emit(state, 'encounter', { boss: room.enemy.boss });
@@ -355,7 +355,8 @@ function leaveFight(state) {
  * One round, one die. The roll is checked twice: plus Might (or the skill's
  * stat) against the foe's Defense, and plus Grit against the foe's Attack.
  */
-function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0 } = {}, label) {
+function strike(state, roll = {}, label) {
+  const { stat: hitStat = 'might', bonus = 0, dmg = 0, riposte = false, safe = false } = roll;
   const foe = enemy(state);
   const { fight } = state.combat;
   const die = d6(state);
@@ -363,12 +364,13 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   const grit = stat(state, 'grit');
   const defense = foe.defense + fight.defense;
   const attack = foe.attack + fight.attack;
-  const crit = die >= critOn;
-  const hit = crit || passes(die, die + hitBase + bonus, defense);
-  const blocked = passes(die, die + grit, attack);
+  const blocked = safe || passes(die, die + grit, attack);
+  // A riposte ignores Defense: it hits exactly when the roll blocks.
+  const hit = riposte ? blocked : passes(die, die + hitBase + bonus, defense);
+  const crit = hit && (die === 6 || (roll.critOnHit ?? false));
 
-  const hitParts = [[cap(hitStat), hitBase]];
-  if (bonus) hitParts.push([label, bonus]);
+  const hitParts = riposte ? [['Grit', grit]] : [[cap(hitStat), hitBase]];
+  if (bonus && !riposte) hitParts.push([label, bonus]);
   state.tally.rounds += 1;
 
   let damage = 0;
@@ -382,6 +384,7 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
     emit(state, 'miss');
   }
   let guard = blocked ? 'blocked' : 'hurt';
+  let countered = 0;
   if (!blocked && foe.hp > 0 && fight.ward > 0) {
     fight.ward -= 1;
     guard = 'warded';
@@ -390,6 +393,12 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
   else if (guard === 'blocked') {
     say(state, `You block ${the(foe.name)}.`);
     emit(state, 'block');
+    if (fight.counter) {
+      countered = fight.counter;
+      foe.hp = Math.max(0, foe.hp - fight.counter);
+      say(state, `You counter: ${the(foe.name)} takes ${fight.counter}.`);
+      emit(state, 'counter', { damage: fight.counter });
+    }
   } else if (guard === 'warded') {
     say(state, `Your ward stops ${the(foe.name)}.`);
     emit(state, 'ward');
@@ -400,19 +409,17 @@ function strike(state, { stat: hitStat = 'might', bonus = 0, critOn = 6, dmg = 0
     kind: 'attack',
     die,
     checks: [
-      { label: 'Hit', parts: hitParts, total: die + hitBase + bonus, target: defense, targetLabel: 'Defense', ok: hit, crit },
-      { label: 'Block', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok: guard !== 'hurt', ward: guard === 'warded', skipped: guard === 'none' },
+      riposte
+        ? { label: 'Hit', parts: hitParts, total: die + grit, target: attack, targetLabel: 'Attack', ok: hit, crit, riposte: true }
+        : { label: 'Hit', parts: hitParts, total: die + hitBase + bonus, target: defense, targetLabel: 'Defense', ok: hit, crit },
+      { label: 'Block', parts: [['Grit', grit]], total: die + grit, target: attack, targetLabel: 'Attack', ok: guard !== 'hurt', ward: guard === 'warded', safe: safe ? label : null, skipped: guard === 'none' },
     ],
     damage,
+    counter: countered,
     taken: guard === 'hurt' ? foe.dmg : 0,
   });
   if (guard === 'hurt') hurt(state, foe.dmg);
 
-  if (!state.over && foe.hp > 0 && fight.poison) {
-    foe.hp = Math.max(0, foe.hp - fight.poison);
-    say(state, `Poison: ${the(foe.name)} loses ${fight.poison}.`);
-    emit(state, 'poison', { damage: fight.poison });
-  }
   if (!state.over && foe.hp === 0) win(state, foe);
   return state;
 }
@@ -448,11 +455,6 @@ export function useSkill(state, id) {
   const skill = R.SKILLS[id];
   hero.focus -= 1;
   emit(state, 'skill', { id });
-  if (skill.escape) {
-    say(state, `${skill.name}: you slip away.`);
-    leaveFight(state);
-    return state;
-  }
   if (skill.heal) say(state, `${skill.name}: +${heal(state, skill.heal, 'skill')} HP.`);
   else say(state, `${skill.name}!`);
   for (const [k, v] of Object.entries(skill.fight ?? {})) state.combat.fight[k] += v;

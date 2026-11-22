@@ -28,10 +28,14 @@ F flees, P drinks a potion, D descends, E / L equip or leave loot.
   new floor, at shrines and on level-up. Wits is also added to trap rolls and to
   Mage spells.
 - **HP** comes from your class plus 2 per level, so the sheet holds only three stats.
-- **Classes.** Each class has three skills, learned at levels 1, 2 and 4.
-  - Warrior (12 HP, Might 2, Grit 3, Wits 1): Smash, Rally, Berserk.
-  - Rogue (9 HP, Might 3, Grit 2, Wits 2): Backstab, Vanish, Poison.
-  - Mage (10 HP, Might 2, Grit 2, Wits 4): Firebolt, Frost, Ward. Spells hit with Wits.
+- **Classes.** Each class is built on one main stat, its highest at the start, and
+  has three skills, learned at levels 1, 2 and 4.
+  - Warrior, Might: you hit hard. 9 HP, Might 3, Grit 2, Wits 1. Smash, Rally, Berserk.
+  - Rogue, Grit: you avoid and retaliate. 5 HP, Might 2, Grit 3, Wits 2. Counter
+    (every block deals 2 back for the fight), Riposte (this roll hits only if it
+    blocks, ignoring Defense), Shadowstep (this roll cannot hurt you; a hit crits).
+  - Mage, Wits: your mana is your weapon. 10 HP, Might 2, Grit 2, Wits 4. Firebolt,
+    Frost, Ward. Spells hit with Wits.
 - **Level-up:** +1 to a stat of your choice, HP and Focus refill.
 - **Dungeon:** six floors of nine rooms on a 5×5 grid. Rooms next to you are
   revealed, except traps. Room contents, monsters and loot come from d6 tables in

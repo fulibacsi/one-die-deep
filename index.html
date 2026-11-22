@@ -132,6 +132,8 @@ button { font: inherit; color: inherit; }
 .xpbar b { display: block; height: 100%; background: var(--ink-soft); }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; }
 .stats div { border: 1.5px solid var(--line); padding: 6px 8px; }
+.stats div.main { border-color: var(--hero); }
+.stats div.main dt { color: var(--hero); }
 .stats dt { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
 .stats dd { margin: 0; font-family: var(--font-mono); font-size: 22px; font-weight: 600; line-height: 1.1; }
 .stats dd small { font-size: 11px; color: var(--good); font-weight: 400; margin-left: 2px; }
@@ -410,6 +412,7 @@ button { font: inherit; color: inherit; }
 .class-card .who-name { font-size: 20px; }
 .class-card .mini { display: flex; gap: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
 .class-card .mini b { color: var(--ink); font-size: 15px; }
+.class-card .mini .main, .class-card .mini .main b { color: var(--hero); }
 .rules { display: grid; gap: 10px; }
 .rules p { margin: 0; max-width: 60ch; }
 .rules strong { font-weight: 700; }

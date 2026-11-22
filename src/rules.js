@@ -21,24 +21,28 @@ export const HP_PER_LEVEL = 2;
 export const SKILL_LEVELS = [1, 2, 4];
 export const xpToLevel = (level) => 5 * level;
 
+// Each class is built on one main stat, its highest at the start.
 export const CLASSES = {
   warrior: {
     name: 'Warrior',
-    blurb: 'The most HP. Smashes and rallies.',
-    hp: 12,
-    stats: { might: 2, grit: 3, wits: 1 },
+    main: 'might',
+    blurb: 'Might: you hit hard.',
+    hp: 9,
+    stats: { might: 3, grit: 2, wits: 1 },
     skills: ['smash', 'rally', 'berserk'],
   },
   rogue: {
     name: 'Rogue',
-    blurb: 'Lands crits and slips away.',
-    hp: 9,
-    stats: { might: 3, grit: 2, wits: 2 },
-    skills: ['backstab', 'vanish', 'poison'],
+    main: 'grit',
+    blurb: 'Grit: you avoid and retaliate.',
+    hp: 5,
+    stats: { might: 2, grit: 3, wits: 2 },
+    skills: ['counter', 'riposte', 'shadowstep'],
   },
   mage: {
     name: 'Mage',
-    blurb: 'Casts spells that hit with Wits.',
+    main: 'wits',
+    blurb: 'Wits: your mana is your weapon.',
     hp: 10,
     stats: { might: 2, grit: 2, wits: 4 },
     skills: ['firebolt', 'frost', 'ward'],
@@ -46,17 +50,19 @@ export const CLASSES = {
 };
 
 // A skill costs 1 Focus and changes the roll you make with it.
-// roll:   modifiers for this one roll (stat used to hit, bonus, critOn, dmg)
-// fight:  modifiers that last until the fight ends (attack, defense, dmg, poison, ward)
+// roll:   modifiers for this one roll: stat (used to hit), bonus, dmg,
+//         riposte (hits exactly when the roll blocks, ignoring Defense),
+//         safe (the block always succeeds), critOnHit (any hit is a crit)
+// fight:  modifiers that last until the fight ends (attack, defense, dmg, ward,
+//         counter: damage dealt back on every block)
 // heal:   HP restored before the roll
-// escape: leave the fight without rolling
 export const SKILLS = {
   smash: { name: 'Smash', text: '+2 to hit this roll. A hit deals 2.', roll: { bonus: 2, dmg: 1 } },
   rally: { name: 'Rally', text: 'Heal 4 HP, then attack.', heal: 4 },
   berserk: { name: 'Berserk', text: 'Your hits deal +1 for the rest of the fight.', fight: { dmg: 1 } },
-  backstab: { name: 'Backstab', text: 'This roll crits on 4, 5 or 6.', roll: { critOn: 4 } },
-  vanish: { name: 'Vanish', text: 'Escape the fight. No roll.', escape: true },
-  poison: { name: 'Poison', text: 'The foe loses 1 HP after every roll this fight.', fight: { poison: 1 } },
+  riposte: { name: 'Riposte', text: 'This roll hits only if it blocks, ignoring Defense. A hit deals 2.', roll: { riposte: true, dmg: 1 } },
+  counter: { name: 'Counter', text: 'Every block deals 2 back for the rest of the fight.', fight: { counter: 2 } },
+  shadowstep: { name: 'Shadowstep', text: 'This roll cannot hurt you, and a hit crits.', roll: { safe: true, critOnHit: true } },
   firebolt: { name: 'Firebolt', text: 'Hit with Wits. A hit deals 2.', roll: { stat: 'wits', dmg: 1 } },
   frost: { name: 'Frost', text: 'Foe Attack −2 this fight. Hit with Wits.', fight: { attack: -2 }, roll: { stat: 'wits' } },
   ward: { name: 'Ward', text: 'Block the next 2 hits this fight. Hit with Wits.', fight: { ward: 2 }, roll: { stat: 'wits' } },
