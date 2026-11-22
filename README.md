@@ -43,6 +43,12 @@ F flees, P drinks a potion, D descends, E / L equip or leave loot.
 - `src/game.js`: the engine. Plain-data state (including the die's seed), so runs
   are reproducible and can be simulated headless.
 - `src/ui.js` and `index.html`: the browser view.
+- `src/sound.js`: every sound effect as a ZzFX parameter list. Paste one into the
+  [ZzFX designer](https://killedbyapixel.github.io/ZzFX/) to hear and tweak it.
+  Sound starts after the first click or key press; the header toggle mutes it and
+  is remembered per browser.
+- `src/vendor/ZzFX.js`: [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 by
+  Frank Force, MIT licence, unmodified.
 - `tests/game.test.js`: engine tests (`npm test`).
 - `tests/balance/`: a bot and a simulation (`npm run balance`). It prints win rate,
   fight length and deaths per floor for each class, and win rate per level-up

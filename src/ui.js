@@ -3,15 +3,32 @@
 // except through its exported actions.
 import * as G from './game.js';
 import * as R from './rules.js';
+import * as S from './sound.js';
 
 const screen = document.getElementById('screen');
 const depthEl = document.getElementById('depth');
 const newRunBtn = document.getElementById('new-run');
+const soundBtn = document.getElementById('sound');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let state = null;
 let picking = true;
-let rolling = false;
+let busy = false;
+
+// What the last action changed, read once by the next render to pick
+// one-shot animations: { before: snapshot(), events } or { arrive: true }.
+let fx = null;
+const happened = (type) => fx?.events?.filter((e) => e.type === type) ?? [];
+
+function snapshot() {
+  return {
+    floor: state.floor,
+    mode: G.mode(state),
+    hp: state.hero.hp,
+    foeHp: G.enemy(state)?.hp ?? null,
+    seen: new Set(Object.keys(state.rooms).filter((k) => state.rooms[k].seen)),
+  };
+}
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
@@ -25,6 +42,13 @@ function heroShape(classId, r) {
     return `<polygon class="g-hero" points="0,${-r * 1.15} ${r * 1.15},${r * 0.85} ${-r * 1.15},${r * 0.85}"/>`;
   }
   return `<circle class="g-hero" r="${r * 1.12}"/>`;
+}
+
+// The hero on the map, gliding in from the room it left.
+function heroOnMap(x, y, scale, from) {
+  const glide = from && !(from.x === x && from.y === y) ? ' glide' : '';
+  const vars = from ? `; --fx: ${from.x}px; --fy: ${from.y}px; --fs: ${from.scale}` : '';
+  return `<g class="hero-g${glide}" style="transform: translate(${x}px, ${y}px) scale(${scale})${vars}">${heroShape(state.classId, 13)}</g>`;
 }
 
 function heroIcon(classId, size = 36) {
@@ -56,6 +80,8 @@ function kindShape(kind) {
       return '<path class="g-ink" d="M0 -15V15M-15 0H15"/>';
     case 'stairs':
       return '<path class="g-ink" d="M-16 14H-6V4H4V-6H14V-16"/>';
+    case 'disarmed':
+      return '<path class="g-spent" d="M-16 10L-8 -8L0 10L8 -8L16 10M-18 10H18"/>';
     default:
       return '';
   }
@@ -63,9 +89,10 @@ function kindShape(kind) {
 
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 
-function dieHtml(face) {
+function dieHtml(face, landed = false) {
   const on = new Set(PIPS[face] ?? []);
-  const cls = ['die', face ? '' : 'blank', face === 6 ? 'six' : '', face === 1 ? 'one' : ''].join(' ').trim();
+  const flourish = landed && face === 6 ? 'pop' : landed && face === 1 ? 'wobble' : '';
+  const cls = ['die', face ? '' : 'blank', face === 6 ? 'six' : '', face === 1 ? 'one' : '', flourish].join(' ').trim();
   const label = face ? `The die shows ${face}` : 'The die has not been rolled yet';
   return `<div class="${cls}" id="die" role="img" aria-label="${label}">${Array.from({ length: 9 }, (_, i) => `<i class="${on.has(i) ? 'on' : ''}"></i>`).join('')}</div>`;
 }
@@ -79,7 +106,7 @@ function showFace(die, face) {
 
 function roomName(room) {
   if (room.enemy) return room.enemy.name;
-  return { stairs: 'Stairs down', chest: 'Chest', shrine: 'Shrine' }[room.kind] ?? 'Empty room';
+  return { stairs: 'Stairs down', chest: 'Chest', shrine: 'Shrine', disarmed: 'Disarmed trap' }[room.kind] ?? 'Empty room';
 }
 
 function roomTip(room) {
@@ -97,6 +124,12 @@ const ROOM = 66;
 
 function renderMap() {
   const reachable = new Set(G.mode(state) === 'explore' ? G.neighbors(state, state.pos) : []);
+  const sameFloor = fx?.before && fx.before.floor === state.floor;
+  const fresh = (k) => sameFloor && !fx.before.seen.has(k);
+  const moved = [...happened('move'), ...happened('escape')].at(-1);
+  const killed = happened('kill').at(-1);
+  const struck = happened('hit').length > 0 && state.combat;
+  const center = (k) => [state.rooms[k].x * CELL + CELL / 2, state.rooms[k].y * CELL + CELL / 2];
   let doors = '';
   let rooms = '';
   for (const [k, room] of Object.entries(state.rooms)) {
@@ -109,29 +142,43 @@ function renderMap() {
       const known = room.visited && n.visited;
       const [x1, y1] = [cx + (dx * ROOM) / 2, cy + (dy * ROOM) / 2];
       const [x2, y2] = [cx + dx * (CELL - ROOM / 2), cy + dy * (CELL - ROOM / 2)];
-      doors += `<line class="door${known ? '' : ' unknown'}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+      const isNew = fresh(k) || fresh(G.key(room.x + dx, room.y + dy));
+      doors += `<line class="door${known ? '' : ' unknown'}${isNew ? ' fresh' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
     }
 
     const here = k === state.pos;
     const hidden = !room.visited && room.kind === 'trap';
     const glyph = room.enemy ? foeShape(room.enemy) : hidden ? '' : kindShape(room.kind);
     let inner = `<rect class="room${room.visited ? '' : ' unknown'}${here ? ' here' : ''}" x="${cx - ROOM / 2}" y="${cy - ROOM / 2}" width="${ROOM}" height="${ROOM}"/>`;
+    const hit = here && room.enemy && struck ? ' struck' : '';
     if (here && glyph) {
-      inner += `<g transform="translate(${cx + 13} ${cy + 4}) scale(0.72)">${glyph}</g>`;
-      inner += `<g transform="translate(${cx - 15} ${cy - 13})">${heroShape(state.classId, 9)}</g>`;
-    } else if (here) {
-      inner += `<g transform="translate(${cx} ${cy})">${heroShape(state.classId, 13)}</g>`;
+      inner += `<g class="glyph${hit}" transform="translate(${cx + 13} ${cy + 4}) scale(0.72)">${glyph}</g>`;
     } else if (glyph) {
       inner += `<g transform="translate(${cx} ${cy - (room.enemy ? 5 : 0)})">${glyph}</g>`;
+    }
+    if (killed?.at === k) {
+      inner += `<g transform="translate(${cx} ${cy})"><circle class="burst" r="16"/><polygon class="burst burst-core" points="0,-14 14,0 0,14 -14,0"/></g>`;
     }
     if (room.enemy && !here) {
       inner += `<text class="g-tag" x="${cx}" y="${cy + 28}" text-anchor="middle">A${room.enemy.attack} D${room.enemy.defense}</text>`;
     }
     const tip = `<title>${esc(roomTip(room))}</title>`;
+    const cls = fresh(k) ? ' class="fresh"' : '';
     rooms += reachable.has(k)
-      ? `<g class="reach" data-room="${k}" tabindex="0" role="button" aria-label="Move to: ${esc(roomTip(room))}">${tip}${inner}</g>`
-      : `<g>${tip}${inner}</g>`;
+      ? `<g class="reach${fresh(k) ? ' fresh' : ''}" data-room="${k}" tabindex="0" role="button" aria-label="Move to: ${esc(roomTip(room))}">${tip}${inner}</g>`
+      : `<g${cls}>${tip}${inner}</g>`;
   }
+
+  // The hero is drawn last, on top, so it can glide across doors.
+  const [hx, hy] = center(state.pos);
+  const crowded = state.rooms[state.pos].enemy || kindShape(state.rooms[state.pos].kind) !== '';
+  const [x, y, scale] = crowded ? [hx - 15, hy - 13, 0.7] : [hx, hy, 1];
+  let from = null;
+  if (moved && moved.from in state.rooms) {
+    const [fx0, fy0] = center(moved.from);
+    from = { x: fx0, y: fy0, scale };
+  }
+  const hero = heroOnMap(x, y, scale, from);
   // Frame the whole floor (not just what is seen, so the view holds still),
   // as a square of at least 3 cells.
   const all = Object.values(state.rooms);
@@ -140,14 +187,18 @@ function renderMap() {
   const span = Math.max(3, maxX - minX + 1, maxY - minY + 1);
   const x0 = (minX - (span - (maxX - minX + 1)) / 2) * CELL;
   const y0 = (minY - (span - (maxY - minY + 1)) / 2) * CELL;
-  return `<svg viewBox="${x0} ${y0} ${span * CELL} ${span * CELL}" role="group" aria-label="Map of floor ${state.floor}">${doors}${rooms}</svg>`;
+  return `<svg viewBox="${x0} ${y0} ${span * CELL} ${span * CELL}" role="group" aria-label="Map of floor ${state.floor}">${doors}${rooms}${hero}</svg>`;
 }
 
 // ---------- sheet ----------
 
-function segs(kind, filled, total) {
-  return `<div class="segs ${kind}">${Array.from({ length: total }, (_, i) => `<i class="${i < filled ? 'on' : ''}"></i>`).join('')}</div>`;
+// A row of pips. With `before`, pips lost or gained since then flash.
+function segs(kind, filled, total, before = filled) {
+  const pip = (i) => [i < filled ? 'on' : '', i >= filled && i < before ? 'lost' : '', i >= before && i < filled ? 'gained' : ''].join(' ').trim();
+  return `<div class="segs ${kind}">${Array.from({ length: total }, (_, i) => `<i class="${pip(i)}"></i>`).join('')}</div>`;
 }
+
+const float = (text, tone) => `<span class="float ${tone}" aria-hidden="true">${text}</span>`;
 
 function renderSheet() {
   const { hero, classId } = state;
@@ -168,9 +219,18 @@ function renderSheet() {
       return `<li class="${known ? '' : 'locked'}"><span><b>${sk.name}</b> ${known ? '' : `<span class="label">level ${R.SKILL_LEVELS[i]}</span>`}</span><span class="muted">${sk.text}</span></li>`;
     })
     .join('');
-  return `<aside class="sheet box vitals" aria-label="Your hero">
-    <div class="who">${heroIcon(classId, 40)}<div><div class="who-name">${cls.name}</div><div class="label">Level ${hero.level}</div></div></div>
-    <div class="track"><div class="track-head"><span class="label">HP</span><span class="num">${hero.hp} / ${G.maxHp(state)}</span></div>${segs('hp', hero.hp, G.maxHp(state))}</div>
+  const hpBefore = fx?.before?.floor === state.floor ? fx.before.hp : hero.hp;
+  const hurtBy = happened('hurt').reduce((n, e) => n + e.amount, 0);
+  const healedBy = happened('heal').reduce((n, e) => n + e.amount, 0);
+  let floats = '';
+  if (hurtBy) floats += float(`−${hurtBy}`, 'bad');
+  else if (happened('ward').length) floats += float('Ward', 'good');
+  else if (happened('block').length) floats += float('Block', 'good');
+  if (healedBy) floats += float(`+${healedBy}`, 'good');
+  const leveled = happened('levelup').length ? ' pulse' : '';
+  return `<aside class="sheet box vitals${hurtBy ? ' shake' : ''}" aria-label="Your hero">
+    <div class="who">${heroIcon(classId, 40)}<div><div class="who-name">${cls.name}</div><div class="label${leveled}">Level ${hero.level}</div></div></div>
+    <div class="track"><div class="track-head"><span class="label">HP</span><span class="num">${hero.hp} / ${G.maxHp(state)}</span></div>${segs('hp', hero.hp, G.maxHp(state), hpBefore)}${floats}</div>
     <div class="track"><div class="track-head"><span class="label">Focus</span><span class="num">${hero.focus} / ${G.maxFocus(state)}</span></div>${segs('focus', hero.focus, G.maxFocus(state))}</div>
     <div class="track"><div class="track-head"><span class="label">XP</span><span class="num">${hero.xp} / ${need}</span></div><div class="xpbar"><b style="width:${(100 * hero.xp) / need}%"></b></div></div>
     <dl class="stats">${stats}</dl>
@@ -225,7 +285,8 @@ function rollHtml(roll) {
     return `<div class="roll"><div class="roll-top">${dieHtml(0)}<div class="verdict"><span class="note">Every random thing in the dungeon is one roll of this die.</span></div></div></div>`;
   }
   const body = roll.kind === 'loot' ? lootTable(roll.die) : `<div class="checks">${roll.checks.map((c) => checkHtml(roll.die, c)).join('')}</div>`;
-  return `<div class="roll"><div class="roll-top">${dieHtml(roll.die)}<div class="verdict">${verdict(roll)}</div></div>${body}</div>`;
+  const landed = fx?.rolled === roll.n;
+  return `<div class="roll"><div class="roll-top">${dieHtml(roll.die, landed)}<div class="verdict">${verdict(roll)}</div></div>${body}</div>`;
 }
 
 function potionButton() {
@@ -239,6 +300,11 @@ function combatHtml() {
   const { fight } = state.combat;
   const { hero } = state;
   const mod = (v) => (v ? ` <span class="muted">(${v > 0 ? '+' : ''}${v})</span>` : '');
+  const hits = happened('hit');
+  const dealt = hits.reduce((n, e) => n + e.damage, 0) + happened('poison').reduce((n, e) => n + e.damage, 0);
+  const crit = hits.some((e) => e.crit);
+  const foeBefore = fx?.before?.foeHp ?? foe.hp;
+  const floats = dealt ? float(`${crit ? 'Crit ' : ''}−${dealt}`, crit ? 'crit' : 'bad') : happened('miss').length ? float('Miss', 'soft') : '';
   const skills = hero.skills
     .map((id, i) => {
       const sk = R.SKILLS[id];
@@ -247,10 +313,11 @@ function combatHtml() {
     })
     .join('');
   return {
-    head: `<div class="foe-card">
+    head: `<div class="foe-card${dealt ? ' struck' : ''}">
+      ${floats}
       <h2>${esc(foe.name)}</h2>
       <div class="foe-stats"><span>Attack <b>${foe.attack + fight.attack}</b>${mod(fight.attack)}</span><span>Defense <b>${foe.defense + fight.defense}</b></span><span>Hits for <b>${foe.dmg}</b></span></div>
-      ${segs('foe', foe.hp, foe.maxHp)}
+      ${segs('foe', foe.hp, foe.maxHp, foeBefore)}
       ${fight.ward ? `<p class="note">Ward: blocks the next ${fight.ward} hit${fight.ward > 1 ? 's' : ''}.</p>` : ''}
       ${fight.poison ? `<p class="note">Poisoned: loses ${fight.poison} HP after each roll.</p>` : ''}
       ${fight.dmg ? `<p class="note">Your hits deal +${fight.dmg}.</p>` : ''}
@@ -333,7 +400,10 @@ function renderPanel() {
   const view = { combat: combatHtml, levelup: levelHtml, loot: lootHtml, dead: endHtml, won: endHtml }[m] ?? exploreHtml;
   const { head, actions } = view(m);
   const log = state.log.slice(-6).reverse().map((line) => `<li>${esc(line)}</li>`).join('');
-  return `<section class="panel box" aria-label="Encounter">${head}${rollHtml(state.roll)}${actions}<ul class="log" aria-live="polite">${log}</ul></section>`;
+  // A new situation (fight, loot, level-up, ...) slides in.
+  const enter = fx?.before && fx.before.mode !== m ? ' enter' : '';
+  const celebrate = m === 'levelup' && enter ? ' celebrate' : '';
+  return `<section class="panel box${celebrate}" aria-label="Encounter"><div class="${enter.trim()}">${head}</div>${rollHtml(state.roll)}<div class="${enter.trim()}">${actions}</div><ul class="log" aria-live="polite">${log}</ul></section>`;
 }
 
 // ---------- screens ----------
@@ -386,31 +456,53 @@ function render() {
     screen.innerHTML = renderStart();
     return;
   }
-  screen.innerHTML = `<div class="board">${renderSheet()}<section class="map-area" aria-label="Dungeon map"><div class="map-wrap">${renderMap()}</div></section>${renderPanel()}</div>`;
+  const hurt = happened('hurt').reduce((n, e) => n + e.amount, 0);
+  const shake = hurt >= 2 ? ' shake-hard' : hurt ? ' shake-soft' : '';
+  const arrive = fx?.arrive || happened('descend').length ? ' arriving' : '';
+  screen.innerHTML = `<div class="board${shake}">${renderSheet()}<section class="map-area" aria-label="Dungeon map"><div class="map-wrap${arrive}">${renderMap()}</div></section>${renderPanel()}</div>`;
+  fx = null;
 }
 
 // ---------- input ----------
 
-function act(fn) {
-  if (rolling || !state) return;
-  const before = state.roll?.n ?? 0;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function act(fn) {
+  if (busy || !state) return;
+  const before = snapshot();
+  const rollBefore = state.roll?.n ?? 0;
   fn(state);
-  if ((state.roll?.n ?? 0) !== before) spin(state.roll.die).then(render);
-  else render();
+  const rolled = (state.roll?.n ?? 0) !== rollBefore ? state.roll.n : null;
+  busy = true;
+  if (rolled) await spin(state.roll.die);
+  // Leaving a floor: the old map sinks away before the new one is drawn.
+  if (state.events.some((e) => e.type === 'descend') && !reduceMotion) {
+    document.querySelector('.map-wrap')?.classList.add('leaving');
+    await wait(260);
+  }
+  busy = false;
+  fx = { before, events: state.events, rolled };
+  render();
+  S.playEvents(state.events);
 }
 
 function spin(face) {
   const die = document.getElementById('die');
-  if (!die || reduceMotion) return Promise.resolve();
-  rolling = true;
+  if (!die || reduceMotion) {
+    S.play('land');
+    return Promise.resolve();
+  }
   die.classList.remove('blank', 'six', 'one');
   die.classList.add('rolling');
-  const timer = setInterval(() => showFace(die, 1 + Math.floor(Math.random() * 6)), 55);
+  const timer = setInterval(() => {
+    showFace(die, 1 + Math.floor(Math.random() * 6));
+    S.play('tick');
+  }, 55);
   return new Promise((resolve) =>
     setTimeout(() => {
       clearInterval(timer);
       showFace(die, face);
-      rolling = false;
+      S.play('land');
       resolve();
     }, 420),
   );
@@ -419,7 +511,9 @@ function spin(face) {
 function start(classId) {
   state = G.newGame(classId, Date.now());
   picking = false;
+  fx = { arrive: true };
   render();
+  S.play('descend');
 }
 
 const ACTIONS = {
@@ -449,6 +543,19 @@ newRunBtn.addEventListener('click', () => {
   picking = true;
   render();
 });
+
+// Audio may only start after a gesture; every gesture also resumes it.
+for (const type of ['pointerdown', 'keydown']) document.addEventListener(type, () => S.unlock(), { capture: true });
+
+function renderSound() {
+  soundBtn.setAttribute('aria-pressed', String(!S.isMuted()));
+  soundBtn.textContent = S.isMuted() ? 'Sound off' : 'Sound on';
+}
+soundBtn.addEventListener('click', () => {
+  S.setMuted(!S.isMuted());
+  renderSound();
+});
+renderSound();
 
 const MOVES = { ArrowUp: [0, -1], ArrowRight: [1, 0], ArrowDown: [0, 1], ArrowLeft: [-1, 0] };
 

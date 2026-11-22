@@ -101,7 +101,7 @@ test('skills cost Focus and are refused without it', () => {
   G.useSkill(s, 'smash');
   assert.equal(s.hero.focus, 0);
   assert.equal(G.enemy(s).hp, 3, 'Smash hits for 2');
-  const before = JSON.stringify(s);
+  const before = JSON.stringify({ ...s, events: [] });
   G.useSkill(s, 'smash');
   assert.equal(JSON.stringify(s), before);
 });
@@ -163,6 +163,21 @@ test('loot can be equipped or left; gear adds to stats and Focus', () => {
   assert.equal(s.hero.gear.charm.name, 'Runed Ring');
 });
 
+test('a trap rolls once, then stays on the map as a disarmed trap', () => {
+  const s = G.newGame('rogue', 11);
+  const start = s.pos;
+  const next = G.neighbors(s, start)[0];
+  Object.assign(s.rooms[next], { kind: 'trap', enemy: null });
+  forceRoll(s, 6);
+  G.move(s, next);
+  assert.equal(s.roll.kind, 'trap');
+  assert.equal(s.rooms[next].kind, 'disarmed');
+  const rolls = s.roll.n;
+  G.move(s, start);
+  G.move(s, next);
+  assert.equal(s.roll.n, rolls, 'walking back through does not roll again');
+});
+
 test('stairs lead down; the last floor has the boss, and beating it wins', () => {
   const s = G.newGame('warrior', 5);
   const stairs = Object.keys(s.rooms).find((k) => s.rooms[k].kind === 'stairs');
@@ -185,6 +200,46 @@ test('stairs lead down; the last floor has the boss, and beating it wins', () =>
   forceRoll(last, 6);
   G.attack(last);
   assert.equal(G.mode(last), 'won');
+});
+
+test('each action lists what it caused, in order, and only that', () => {
+  const types = (s) => s.events.map((e) => e.type);
+  const s = forceRoll(fight({ attack: 20 }), 3);
+  G.attack(s);
+  assert.deepEqual(types(s), ['hit', 'hurt']);
+  forceRoll(s, 6);
+  G.attack(s);
+  assert.deepEqual(types(s), ['hit', 'kill']);
+  assert.deepEqual(s.events[0], { type: 'hit', damage: 2, crit: true });
+  G.attack(s);
+  assert.deepEqual(types(s), [], 'a refused action causes nothing');
+
+  const t = forceRoll(fight({ hp: 1, xp: R.xpToLevel(1) }), 6);
+  G.attack(t);
+  assert.deepEqual(types(t), ['hit', 'kill', 'levelup']);
+  G.chooseStat(t, 'might');
+  assert.deepEqual(t.events, [{ type: 'stat', stat: 'might', skill: R.CLASSES.warrior.skills[1] }]);
+});
+
+test('log lines read correctly for armor names and for the boss', () => {
+  const s = G.newGame('warrior', 13);
+  const next = G.neighbors(s, s.pos)[0];
+  Object.assign(s.rooms[next], { kind: 'chest', enemy: null });
+  forceRoll(s, R.LOOT_TABLE.indexOf('armor') + 1);
+  G.move(s, next);
+  assert.equal(s.log.at(-1), `Loot: ${R.SLOTS.armor.names[0]}.`);
+
+  const t = G.newGame('warrior', 13);
+  const lair = G.neighbors(t, t.pos)[0];
+  Object.assign(t.rooms[lair], { kind: 'boss', enemy: { ...R.BOSS, maxHp: R.BOSS.hp, xp: 0, elite: false, boss: true } });
+  G.move(t, lair);
+  assert.equal(t.log.at(-1), 'The Hollow King blocks the way.');
+  forceRoll(t, 6);
+  G.attack(t);
+  assert.deepEqual(t.log.slice(-2), ['Critical! You hit the Hollow King for 2.', 'You block the Hollow King.']);
+  forceRoll(t, 1);
+  G.attack(t);
+  assert.equal(t.log.at(-1), 'The Hollow King hits you for 2.');
 });
 
 test('running out of HP ends the run', () => {
