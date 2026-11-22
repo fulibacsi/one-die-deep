@@ -163,6 +163,21 @@ test('loot can be equipped or left; gear adds to stats and Focus', () => {
   assert.equal(s.hero.gear.charm.name, 'Runed Ring');
 });
 
+test('a trap rolls once, then stays on the map as a disarmed trap', () => {
+  const s = G.newGame('rogue', 11);
+  const start = s.pos;
+  const next = G.neighbors(s, start)[0];
+  Object.assign(s.rooms[next], { kind: 'trap', enemy: null });
+  forceRoll(s, 6);
+  G.move(s, next);
+  assert.equal(s.roll.kind, 'trap');
+  assert.equal(s.rooms[next].kind, 'disarmed');
+  const rolls = s.roll.n;
+  G.move(s, start);
+  G.move(s, next);
+  assert.equal(s.roll.n, rolls, 'walking back through does not roll again');
+});
+
 test('stairs lead down; the last floor has the boss, and beating it wins', () => {
   const s = G.newGame('warrior', 5);
   const stairs = Object.keys(s.rooms).find((k) => s.rooms[k].kind === 'stairs');

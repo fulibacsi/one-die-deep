@@ -269,7 +269,8 @@ function enterRoom(state, room) {
       rollLoot(state);
       break;
     case 'trap': {
-      room.kind = 'empty';
+      // Spotted or sprung, a trap is spent and stays on the map as disarmed.
+      room.kind = 'disarmed';
       const die = d6(state);
       const wits = stat(state, 'wits');
       const target = R.trapRating(state.floor);
@@ -280,7 +281,7 @@ function enterRoom(state, room) {
         checks: [{ label: 'Spot', parts: [['Wits', wits]], total: die + wits, target, targetLabel: 'Trap', ok }],
         taken: ok ? 0 : R.trapDamage(state.floor),
       });
-      if (ok) say(state, 'You spot a trap and step around it.');
+      if (ok) say(state, 'You spot a trap and disarm it.');
       else {
         say(state, `A trap springs: −${state.roll.taken} HP.`);
         hurt(state, state.roll.taken);

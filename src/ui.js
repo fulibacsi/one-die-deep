@@ -56,6 +56,8 @@ function kindShape(kind) {
       return '<path class="g-ink" d="M0 -15V15M-15 0H15"/>';
     case 'stairs':
       return '<path class="g-ink" d="M-16 14H-6V4H4V-6H14V-16"/>';
+    case 'disarmed':
+      return '<path class="g-spent" d="M-16 10L-8 -8L0 10L8 -8L16 10M-18 10H18"/>';
     default:
       return '';
   }
@@ -79,7 +81,7 @@ function showFace(die, face) {
 
 function roomName(room) {
   if (room.enemy) return room.enemy.name;
-  return { stairs: 'Stairs down', chest: 'Chest', shrine: 'Shrine' }[room.kind] ?? 'Empty room';
+  return { stairs: 'Stairs down', chest: 'Chest', shrine: 'Shrine', disarmed: 'Disarmed trap' }[room.kind] ?? 'Empty room';
 }
 
 function roomTip(room) {
