@@ -150,6 +150,9 @@ button { font: inherit; color: inherit; }
 .map-wrap .room.unknown { fill: none; stroke: var(--ink-soft); stroke-dasharray: 6 5; }
 .map-wrap .room.here { stroke: var(--hero); stroke-width: 4; }
 .map-wrap .reach { cursor: pointer; }
+/* Unexplored rooms have no fill, and SVG only takes clicks on the painted
+   parts of a shape. Make the whole room take the click or tap. */
+.map-wrap .reach .room { pointer-events: all; }
 .map-wrap .reach:hover .room, .map-wrap .reach:focus-visible .room { fill: var(--grid); }
 .map-wrap .reach:focus-visible { outline: none; }
 .map-wrap .reach:focus-visible .room { stroke: var(--hero); }
