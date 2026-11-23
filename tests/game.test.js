@@ -19,7 +19,7 @@ function fight(foe = {}, classId = 'warrior') {
   const room = s.rooms[s.pos];
   room.kind = 'monster';
   room.enemy = { name: 'Dummy', attack: 6, defense: 5, hp: 3, maxHp: 3, dmg: 1, xp: 1, elite: false, boss: false, ...foe };
-  s.combat = { fight: { attack: 0, defense: 0, dmg: 0, poison: 0, ward: 0 } };
+  s.combat = { fight: { attack: 0, defense: 0, dmg: 0, ward: 0, counter: 0 } };
   s.prev = G.neighbors(s, s.pos)[0];
   return s;
 }
@@ -60,14 +60,16 @@ test('the same seed and actions give the same run, also after a JSON round trip'
 });
 
 test('one roll hits when roll + Might meets Defense, and blocks when roll + Grit meets Attack', () => {
-  // Warrior: Might 2, Grit 3. Defense 5 needs a 3; Attack 6 needs a 3.
-  const s = forceRoll(fight(), 3);
+  // Both targets set so that a 3 exactly meets them and a 2 misses both.
+  const { might, grit } = R.CLASSES.warrior.stats;
+  const foe = { defense: might + 3, attack: grit + 3 };
+  const s = forceRoll(fight(foe), 3);
   G.attack(s);
   assert.equal(G.enemy(s).hp, 2);
   assert.equal(s.hero.hp, R.CLASSES.warrior.hp);
   assert.deepEqual(s.roll.checks.map((c) => c.ok), [true, true]);
 
-  const t = forceRoll(fight(), 2);
+  const t = forceRoll(fight(foe), 2);
   G.attack(t);
   assert.equal(G.enemy(t).hp, 3);
   assert.equal(t.hero.hp, R.CLASSES.warrior.hp - 1);
@@ -106,27 +108,48 @@ test('skills cost Focus and are refused without it', () => {
   assert.equal(JSON.stringify(s), before);
 });
 
-test('Ward blocks hits and Poison ticks after each roll', () => {
+test('Ward blocks hits, and Counter strikes back on every block for the rest of the fight', () => {
   const s = forceRoll(fight({ hp: 5, defense: 20 }, 'mage'), 2);
   s.hero.skills.push('ward');
   G.useSkill(s, 'ward');
   assert.equal(s.hero.hp, R.CLASSES.mage.hp);
   assert.equal(s.combat.fight.ward, 1);
 
-  const t = forceRoll(fight({ hp: 5, defense: 20 }, 'rogue'), 4);
-  t.hero.skills.push('poison');
-  G.useSkill(t, 'poison');
-  assert.equal(G.enemy(t).hp, 4);
+  // The rogue knows Counter from level 1. Attack 1 is always blocked; Defense 20 never hit.
+  const t = forceRoll(fight({ hp: 5, defense: 20, attack: 1 }, 'rogue'), 4);
+  G.useSkill(t, 'counter');
+  assert.equal(G.enemy(t).hp, 3);
+  assert.deepEqual(t.events.map((e) => e.type), ['skill', 'miss', 'block', 'counter']);
+  forceRoll(t, 4);
+  G.attack(t);
+  assert.equal(G.enemy(t).hp, 1, 'Counter lasts the whole fight');
 });
 
-test('Vanish and a successful flee return you to the room you came from', () => {
-  const s = fight({}, 'rogue');
-  const from = s.prev;
-  s.hero.skills.push('vanish');
-  G.useSkill(s, 'vanish');
-  assert.equal(G.mode(s), 'explore');
-  assert.equal(s.pos, from);
+test('Riposte hits exactly when the roll blocks; Shadowstep cannot be hurt and its hit crits', () => {
+  const { grit } = R.CLASSES.rogue.stats;
+  const riposte = (face, foe) => {
+    const s = forceRoll(fight({ hp: 5, ...foe }, 'rogue'), face);
+    s.hero.skills.push('riposte');
+    G.useSkill(s, 'riposte');
+    return s;
+  };
+  const blocked = riposte(3, { defense: 20, attack: grit + 3 });
+  assert.equal(G.enemy(blocked).hp, 3, 'a block ripostes for 2, whatever the Defense');
+  const open = riposte(2, { defense: 1, attack: grit + 3 });
+  assert.equal(G.enemy(open).hp, 5, 'no block, no riposte, even against Defense 1');
+  assert.equal(open.hero.hp, R.CLASSES.rogue.hp - 1);
 
+  const step = (face, foe) => {
+    const s = forceRoll(fight({ hp: 5, attack: 20, ...foe }, 'rogue'), face);
+    s.hero.skills.push('shadowstep');
+    G.useSkill(s, 'shadowstep');
+    return s;
+  };
+  assert.equal(step(1).hero.hp, R.CLASSES.rogue.hp, 'not even a 1 hurts');
+  assert.equal(G.enemy(step(3, { defense: 1 })).hp, 3, 'a hit crits for 2');
+});
+
+test('a successful flee returns you to the room you came from', () => {
   const t = forceRoll(fight(), 6);
   const back = t.prev;
   G.flee(t);
@@ -215,7 +238,7 @@ test('stairs lead down; the last floor has the boss, and beating it wins', () =>
   assert.ok(lair);
   last.pos = lair;
   last.rooms[lair].enemy.hp = 1;
-  last.combat = { fight: { attack: 0, defense: 0, dmg: 0, poison: 0, ward: 0 } };
+  last.combat = { fight: { attack: 0, defense: 0, dmg: 0, ward: 0, counter: 0 } };
   forceRoll(last, 6);
   G.attack(last);
   assert.equal(G.mode(last), 'won');

@@ -210,7 +210,8 @@ function renderSheet() {
   const stats = R.STATS.map((s) => {
     const total = G.stat(state, s);
     const gear = total - hero.stats[s];
-    return `<div title="${esc(R.STAT_INFO[s])}"><dt>${s}</dt><dd>${total}${gear ? `<small>+${gear}</small>` : ''}</dd></div>`;
+    const main = s === cls.main;
+    return `<div class="${main ? 'main' : ''}" title="${esc(R.STAT_INFO[s])}${main ? ` ${cls.name}s are built on it.` : ''}"><dt>${s}${main ? '<span class="wide-only"> · main</span>' : ''}</dt><dd>${total}${gear ? `<small>+${gear}</small>` : ''}</dd></div>`;
   }).join('');
   const gear = Object.entries(hero.gear)
     .map(([slot, item]) => `<li><span class="label">${slot}</span><span>${item ? `${esc(item.name)} <span class="muted">${plus(item.bonus)}</span>` : '<span class="muted">none</span>'}</span></li>`)
@@ -268,7 +269,9 @@ function checkHtml(die, c) {
   const met = c.total >= c.target;
   const natural = (die === 1 && met) || (die === 6 && !met) ? `, but a ${die} always ${die === 6 ? 'succeeds' : 'fails'}` : '';
   const ward = c.ward ? ', Ward stops it' : '';
-  return `<div class="check ${c.ok ? 'ok' : 'no'}"><span class="label">${c.label}</span><span class="math">${die}${parts} = ${c.total} ${met ? '≥' : '<'} ${c.targetLabel} ${c.target}${natural}${ward}</span></div>`;
+  const riposte = c.riposte ? ', a riposte hits when you block' : '';
+  const safe = c.safe && !met ? `, ${esc(c.safe)} keeps you safe` : '';
+  return `<div class="check ${c.ok ? 'ok' : 'no'}"><span class="label">${c.label}</span><span class="math">${die}${parts} = ${c.total} ${met ? '≥' : '<'} ${c.targetLabel} ${c.target}${natural}${ward}${riposte}${safe}</span></div>`;
 }
 
 // The headline of a roll: what happened, in two words or fewer per check.
@@ -282,6 +285,7 @@ function verdict(roll) {
   if (block.skipped) out += chip(true, 'Foe falls');
   else if (block.ward) out += chip(true, 'Warded');
   else out += block.ok ? chip(true, 'Blocked') : chip(false, `Hurt −${roll.taken}`);
+  if (roll.counter) out += chip(true, `Counter −${roll.counter}`);
   return out;
 }
 
@@ -306,7 +310,7 @@ function combatHtml() {
   const { hero } = state;
   const mod = (v) => (v ? ` <span class="muted">(${v > 0 ? '+' : ''}${v})</span>` : '');
   const hits = happened('hit');
-  const dealt = hits.reduce((n, e) => n + e.damage, 0) + happened('poison').reduce((n, e) => n + e.damage, 0);
+  const dealt = hits.reduce((n, e) => n + e.damage, 0) + happened('counter').reduce((n, e) => n + e.damage, 0);
   const crit = hits.some((e) => e.crit);
   const foeBefore = fx?.before?.foeHp ?? foe.hp;
   const floats = dealt ? float(`${crit ? 'Crit ' : ''}−${dealt}`, crit ? 'crit' : 'bad') : happened('miss').length ? float('Miss', 'soft') : '';
@@ -324,7 +328,7 @@ function combatHtml() {
       <div class="foe-stats"><span>Attack <b>${foe.attack + fight.attack}</b>${mod(fight.attack)}</span><span>Defense <b>${foe.defense + fight.defense}</b></span><span>Hits for <b>${foe.dmg}</b></span></div>
       ${segs('foe', foe.hp, foe.maxHp, foeBefore)}
       ${fight.ward ? `<p class="note">Ward: blocks the next ${fight.ward} hit${fight.ward > 1 ? 's' : ''}.</p>` : ''}
-      ${fight.poison ? `<p class="note">Poisoned: loses ${fight.poison} HP after each roll.</p>` : ''}
+      ${fight.counter ? `<p class="note">Counter: every block deals ${fight.counter} back.</p>` : ''}
       ${fight.dmg ? `<p class="note">Your hits deal +${fight.dmg}.</p>` : ''}
     </div>`,
     actions: `<div class="actions">
@@ -429,7 +433,7 @@ function renderStart() {
       return `<button class="class-card" type="button" data-class="${id}">
         <div class="who">${heroIcon(id, 36)}<div class="who-name">${c.name}</div></div>
         <div>${c.blurb}</div>
-        <div class="mini"><span>HP <b>${c.hp}</b></span>${R.STATS.map((s) => `<span>${cap(s)} <b>${c.stats[s]}</b></span>`).join('')}</div>
+        <div class="mini"><span>HP <b>${c.hp}</b></span>${R.STATS.map((s) => `<span class="${s === c.main ? 'main' : ''}">${cap(s)} <b>${c.stats[s]}</b></span>`).join('')}</div>
         <div class="muted"><b>${first.name}:</b> ${first.text}</div>
       </button>`;
     })

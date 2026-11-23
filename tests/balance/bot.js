@@ -1,19 +1,20 @@
 // A plain, greedy bot: clears every room on a floor, then takes the stairs.
 // It plays worse than a careful human, so its win rate is a floor, not a target.
 import * as G from '../../src/game.js';
+import * as R from '../../src/rules.js';
 
 // Level-up order per class, repeated. These are each class's best simple
 // order in the growth grid printed by simulate.js.
 export const GROWTH = {
   warrior: ['might'],
-  rogue: ['might'],
+  rogue: ['grit'],
   mage: ['wits'],
 };
 
 // How much the bot values one point of each stat on gear.
 const VALUE = {
   warrior: { might: 3, grit: 2, wits: 1 },
-  rogue: { might: 3, grit: 2, wits: 2 },
+  rogue: { might: 2, grit: 3, wits: 2 },
   mage: { might: 1, grit: 2, wits: 3 },
 };
 
@@ -22,9 +23,9 @@ const WANTS = {
   smash: (s, foe) => foe.hp >= 2,
   rally: (s) => s.hero.hp <= G.maxHp(s) - 4,
   berserk: (s, foe) => foe.hp >= 4 && s.combat.fight.dmg === 0,
-  backstab: (s, foe) => foe.hp >= 2,
-  vanish: (s, foe) => s.hero.hp <= foe.dmg && s.hero.potions === 0,
-  poison: (s, foe) => foe.hp >= 3 && s.combat.fight.poison === 0,
+  riposte: (s, foe) => foe.hp >= 2,
+  counter: (s, foe) => foe.hp >= 2 && s.combat.fight.counter === 0,
+  shadowstep: (s, foe) => foe.hp >= 2,
   firebolt: () => true,
   frost: (s, foe) => foe.hp >= 3 && s.combat.fight.attack === 0,
   ward: (s, foe) => foe.hp >= 3 && s.combat.fight.ward === 0,
@@ -38,8 +39,10 @@ function fight(s) {
   const { hero } = s;
   if (hero.hp <= foe.dmg && hero.potions > 0) return G.drinkPotion(s);
   if (hero.focus > 0) {
-    // Newest skills first: they are the strongest.
-    const skill = [...hero.skills].reverse().find((id) => WANTS[id](s, foe));
+    // Effects that last the fight first (they pay off over many rolls),
+    // then newest skills first: they are the strongest.
+    const order = [...hero.skills].reverse().sort((a, b) => Boolean(R.SKILLS[b].fight) - Boolean(R.SKILLS[a].fight));
+    const skill = order.find((id) => WANTS[id](s, foe));
     if (skill) return G.useSkill(s, skill);
   }
   // No plain fleeing: with no HP regen, a bot that flees just walks back in.
