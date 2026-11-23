@@ -1,7 +1,9 @@
 // NETDIVE: dives to crack the Core, for each Bias-shift variant and two
-// players: a careful bot (picks the attack that isn't resisted and has the
-// better odds) and a random one. The gap between them shows how much the
-// choice of attack matters.
+// players: a careful bot (picks the attack that strips the most layers per
+// cycle it expects to spend) and a random one. The gap between them shows how
+// much the choice of attack matters. Also: how attacks turn out by number of
+// hits, and how often the choice is a real one, where neither attack is at
+// least as likely as the other to get 1, 2 and 3 hits.
 // Usage: node tests/balance/prototypes/netdive.js [profiles, default 300]
 import * as N from '../../../design/prototypes/netdive/engine.js';
 import { neighbors } from '../../../design/prototypes/shared/dice.js';
@@ -26,21 +28,38 @@ function stepToward(dive, goal) {
   return null;
 }
 
-// Chance an attack lands at the dive's current Bias.
-function odds(dive, approach, ice) {
+// Chance of at least 1, 2 and 3 hits for an attack at the dive's current Bias.
+function atLeast(dive, approach) {
   let faces = 0;
-  for (let die = 1; die <= 6; die++) {
-    const zero = N.zeroDays(dive).includes(die);
-    const win = approach === 'break' ? die < dive.bias : die > dive.bias;
-    if (zero || (N.resists(ice) !== approach && win)) faces += 1;
-  }
-  return faces / 6;
+  for (let die = 1; die <= 6; die++) if (N.hits(dive, approach, die)) faces += 1;
+  const p = faces / 6;
+  const n = dive.dice[approach];
+  const exactly = (k) => (k > n ? 0 : choose(n, k) * p ** k * (1 - p) ** (n - k));
+  return [1, 2, 3].map((k) => [1, 2, 3].filter((j) => j >= k).reduce((sum, j) => sum + exactly(j), 0));
+}
+const choose = (n, k) => (k === 0 ? 1 : (n * choose(n - 1, k - 1)) / k);
+
+// Layers stripped per cycle the attack is expected to cost.
+function worth(dive, approach, ice) {
+  const [one, two, three] = atLeast(dive, approach);
+  const layers = one + three; // 1 or 2 hits strip one layer, 3 strip two
+  const hitBack = 1 - two;
+  return layers / (1 + hitBack * ice.counter);
 }
 
 const POLICIES = {
-  careful: (dive, ice) => (odds(dive, 'break', ice) >= odds(dive, 'spoof', ice) ? 'break' : 'spoof'),
+  careful: (dive, ice) => (worth(dive, 'break', ice) >= worth(dive, 'spoof', ice) ? 'break' : 'spoof'),
   random: () => (Math.random() < 0.5 ? 'break' : 'spoof'),
 };
+
+function choiceKind(dive) {
+  const b = atLeast(dive, 'break');
+  const s = atLeast(dive, 'spoof');
+  const eps = 1e-9;
+  if (b.every((x, i) => Math.abs(x - s[i]) < eps)) return 'same';
+  if (b.every((x, i) => x >= s[i] - eps) || s.every((x, i) => x >= b[i] - eps)) return 'dominated';
+  return 'tradeoff';
+}
 
 function playDive(p, seed, policy, stats) {
   const dive = N.startDive(p, seed);
@@ -53,9 +72,10 @@ function playDive(p, seed, policy, stats) {
     if (N.mode(dive) === 'ice') {
       const ice = dive.rooms[dive.engaged].ice;
       if (dive.bias === N.BIAS_MIN || dive.bias === N.BIAS_MAX) stats.extreme += 1;
+      stats[choiceKind(dive)] += 1;
       N.attempt(dive, POLICIES[policy](dive, ice));
       stats.attempts += 1;
-      if (dive.roll.outcome !== 'fail') stats.landed += 1;
+      stats[dive.roll.outcome] += 1;
       continue;
     }
     const here = dive.rooms[dive.pos];
@@ -74,7 +94,7 @@ function playDive(p, seed, policy, stats) {
 
 function run(shift, policy) {
   const results = [];
-  const stats = { attempts: 0, landed: 0, extreme: 0, moves: 0, backtracks: 0 };
+  const stats = { attempts: 0, extreme: 0, moves: 0, backtracks: 0, fail: 0, scrape: 0, clean: 0, double: 0, same: 0, dominated: 0, tradeoff: 0 };
   for (let s = 1; s <= profiles; s++) {
     const p = N.newProfile();
     N.setShift(p, shift);
@@ -94,7 +114,8 @@ function run(shift, policy) {
   results.sort((a, b) => a - b);
   const q = (f) => results[Math.floor(f * (results.length - 1))];
   const pct = (n, d) => `${Math.round((100 * n) / d)}%`;
-  return `${shift.padEnd(9)} ${policy.padEnd(8)} won ${pct(results.filter(Number.isFinite).length, profiles).padStart(4)}  dives p10/median/p90 ${q(0.1)}/${q(0.5)}/${q(0.9)}  attacks land ${pct(stats.landed, stats.attempts)}  at Bias 2 or 5 ${pct(stats.extreme, stats.attempts)}  moves back ${pct(stats.backtracks, stats.moves)}`;
+  const a = stats.attempts;
+  return `${shift.padEnd(9)} ${policy.padEnd(8)} won ${pct(results.filter(Number.isFinite).length, profiles).padStart(4)}  dives p10/median/p90 ${q(0.1)}/${q(0.5)}/${q(0.9)}  hits 0/1/2/3 ${pct(stats.fail, a)}/${pct(stats.scrape, a)}/${pct(stats.clean, a)}/${pct(stats.double, a)}  real choice ${pct(stats.tradeoff, a)} (same ${pct(stats.same, a)})  at Bias 2 or 5 ${pct(stats.extreme, a)}  moves back ${pct(stats.backtracks, stats.moves)}`;
 }
 
 console.log(`${profiles} profiles per row, starting Bias ${N.START.bias}, capped at ${CAP} dives`);

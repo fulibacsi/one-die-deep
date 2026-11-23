@@ -1,15 +1,21 @@
 // NETDIVE: an incremental hacking game on One Die Deep's map and die.
 //
-// The one stat is Bias, 2 to 5. Against ICE there are two attacks:
-// BREAK (technical, succeeds on a roll under your Bias) and SPOOF (social
-// engineering, succeeds on a roll over it). A roll equal to your Bias is a
-// zero-day: the ICE crashes outright, whatever it resists. ICE resists one
-// attack: a resisted attack only gets through on a zero-day.
+// The one stat is Bias, 2 to 5. Against ICE there are two attacks, rolled
+// the way Lasers & Feelings rolls: pick one, then roll its dice and count
+// the hits. A die under your Bias is a hit for BREAK (technical), a die over
+// it is a hit for SPOOF (social engineering), and a die showing your Bias
+// exactly is a zero-day: a hit for either. You roll one die, plus one for
+// each level of expertise in that attack.
 //
-// Every success moves your Bias by one. Which way is a setting while we
-// explore: SWING (a success pushes you toward the other attack) or MOMENTUM
-// (a success makes the same attack easier). Each dive starts from your
-// starting Bias again.
+//   0 hits: the attack fails and the ICE hits back.
+//   1 hit:  it strips a layer, but the ICE hits back.
+//   2 hits: it strips a layer clean.
+//   3 hits: it strips two layers.
+//
+// An attack that hits moves your Bias by one. Which way is a setting while
+// we explore: SWING (a hit pushes you toward the other attack) or MOMENTUM
+// (a hit makes the same attack easier). Each dive starts from your starting
+// Bias again.
 //
 // A dive lasts until your cycles run out. Every roll costs one, and so does
 // every move into a node you haven't been to: going back through explored
@@ -19,42 +25,37 @@ import { d6, makeFloor, neighbors, reveal } from '../shared/dice.js';
 
 export const LAYERS = 6;
 export const LAYER_NAMES = ['Perimeter', 'Mail server', 'Accounting', 'R&D vault', 'Black site', 'Core'];
-export const START = { cycles: 14, bias: 3 };
+export const START = { cycles: 28, bias: 3 };
+export const MAX_DICE = 3;
 export const BIAS_MIN = 2;
 export const BIAS_MAX = 5;
 export const ATTACKS = { break: 'Break', spoof: 'Spoof' };
 
 export const SHIFTS = {
   swing: { name: 'Swing', text: 'A success pushes your Bias toward the other attack, so you have to alternate.' },
-  momentum: { name: 'Momentum', text: 'A success makes the same attack easier, so you specialise, and resistant ICE pushes back.' },
+  momentum: { name: 'Momentum', text: 'A success makes the same attack easier, so you can lean on one.' },
 };
 
+// Expertise is where the extra dice come from.
 export const UPGRADES = {
-  battery: { name: 'Battery', text: '+4 cycles per dive.', base: 5, growth: 1.45, max: 8 },
+  breakExpert: { name: 'Break expertise', text: '+1 die when you Break.', base: 8, growth: 2.5, max: MAX_DICE - 1 },
+  spoofExpert: { name: 'Spoof expertise', text: '+1 die when you Spoof.', base: 8, growth: 2.5, max: MAX_DICE - 1 },
   tuner: { name: 'Bias tuner', text: 'Choose your starting Bias: 2–4, then 2–5.', base: 7, growth: 2.5, max: 2 },
-  buffer: { name: 'Buffer', text: 'Each level rerolls one failed roll per dive.', base: 9, growth: 1.8, max: 3 },
-  compress: { name: 'Compressor', text: '+50% data from ICE and caches.', base: 13, growth: 1.9, max: 4 },
-  firewall: { name: 'Firewall', text: 'ICE counterattacks cost 1 cycle less.', base: 18, growth: 2.2, max: 2 },
   relay: { name: 'Relay', text: 'Start each dive one layer deeper, up to your best minus one.', base: 21, growth: 1.8, max: 4 },
-  exploit: { name: 'Exploit kit', text: 'A roll one above your Bias is a zero-day too.', base: 54, growth: 1, max: 1 },
+  exploit: { name: 'Exploit kit', text: 'A die one above your Bias is a zero-day too.', base: 54, growth: 1, max: 1 },
 };
 export const cost = (id, level) => Math.round(UPGRADES[id].base * UPGRADES[id].growth ** level);
 
-// A wall can't be talked round; a sentry spots brute force.
+// ICE differs in how many layers it has and how hard it hits back.
 const ICE = [
-  { name: 'Wall', layers: 1, counter: 1, pay: 1, resists: 'spoof' },
-  { name: 'Sentry', layers: 1, counter: 2, pay: 1, resists: 'break' },
-  { name: 'Black ICE', layers: 2, counter: 2, pay: 2, resists: null },
+  { name: 'Wall', layers: 1, counter: 1, pay: 1 },
+  { name: 'Sentry', layers: 1, counter: 2, pay: 1 },
+  { name: 'Black ICE', layers: 2, counter: 2, pay: 2 },
 ];
 const ICE_TABLE = [0, 0, 1, 1, 2, 2];
 const NODE_TABLE = ['empty', 'ice', 'ice', 'ice', 'cache', 'special'];
 const SPECIAL_TABLE = ['trace', 'trace', 'trace', 'backdoor', 'backdoor', 'backdoor'];
-
-/** The attack this ICE resists right now. The Core's layers alternate. */
-export function resists(ice) {
-  if (ice.core) return ice.layers % 2 ? 'break' : 'spoof';
-  return ice.resists;
-}
+const OUTCOMES = ['fail', 'scrape', 'clean', 'double'];
 
 // ---------- profile: what carries over between dives ----------
 
@@ -72,7 +73,7 @@ export function newProfile() {
 }
 
 export const biasRange = (p) => [[3, 3], [2, 4], [2, 5]][p.levels.tuner];
-export const maxCycles = (p) => START.cycles + 4 * p.levels.battery;
+export const maxCycles = () => START.cycles;
 export const startLayer = (p) => Math.max(1, Math.min(1 + p.levels.relay, p.deepest - 1));
 
 export function canBuy(p, id) {
@@ -108,9 +109,7 @@ export function startDive(p, seed) {
     bias: p.bias,
     shift: p.shift ?? 'swing',
     exploit: p.levels.exploit > 0,
-    buffer: p.levels.buffer,
-    firewall: p.levels.firewall,
-    payRate: 1 + 0.5 * p.levels.compress,
+    dice: { break: 1 + p.levels.breakExpert, spoof: 1 + p.levels.spoofExpert },
     cycles: maxCycles(p),
     max: maxCycles(p),
     layer: startLayer(p),
@@ -146,7 +145,7 @@ function enterLayer(dive, layer) {
     const node = dive.rooms[k];
     if (k === floor.exit) {
       node.kind = layer === LAYERS ? 'ice' : 'uplink';
-      if (layer === LAYERS) node.ice = { name: 'The Core', layers: 6, max: 6, counter: 3, pay: 0, resists: null, core: true };
+      if (layer === LAYERS) node.ice = { name: 'The Core', layers: 6, max: 6, counter: 3, pay: 0, core: true };
       continue;
     }
     node.kind = NODE_TABLE[d6(dive) - 1];
@@ -173,10 +172,9 @@ function spend(dive, n) {
 }
 
 function gain(dive, amount) {
-  const got = Math.round(amount * dive.payRate);
-  dive.data += got;
-  emit(dive, 'data', { amount: got });
-  return got;
+  dive.data += amount;
+  emit(dive, 'data', { amount });
+  return amount;
 }
 
 export const mode = (dive) => dive.over ?? (dive.engaged ? 'ice' : 'explore');
@@ -261,39 +259,36 @@ export function descend(dive) {
   return dive;
 }
 
-/** One attack, 'break' or 'spoof', against the engaged ICE. */
+/** Whether one die is a hit for this attack at the dive's current Bias. */
+export const hits = (dive, approach, die) => zeroDays(dive).includes(die) || wins(dive, approach, die);
+
+/** One attack, 'break' or 'spoof', against the engaged ICE: roll its dice, count the hits. */
 export function attempt(dive, approach) {
   dive.events = [];
   if (mode(dive) !== 'ice' || !ATTACKS[approach]) return dive;
   const node = dive.rooms[dive.engaged];
   const { ice } = node;
-  const resisted = resists(ice) === approach;
-  const lands = (die) => zeroDays(dive).includes(die) || (!resisted && wins(dive, approach, die));
-  let die = d6(dive);
-  let rerolled = null;
-  if (!lands(die) && dive.buffer > 0) {
-    dive.buffer -= 1;
-    rerolled = die;
-    die = d6(dive);
-  }
-  const outcome = zeroDays(dive).includes(die) ? 'zero-day' : lands(die) ? 'success' : 'fail';
-  dive.roll = { n: (dive.roll?.n ?? 0) + 1, die, kind: approach, outcome, rerolled, resisted, bias: dive.bias };
+  const dice = Array.from({ length: dive.dice[approach] }, () => d6(dive));
+  const count = dice.filter((die) => hits(dive, approach, die)).length;
+  const outcome = OUTCOMES[count];
+  dive.roll = { n: (dive.roll?.n ?? 0) + 1, dice, kind: approach, hits: dice.map((die) => hits(dive, approach, die)), outcome, bias: dive.bias, zeroDays: zeroDays(dive) };
 
-  if (outcome === 'zero-day') {
-    crash(dive, node, true);
-  } else if (outcome === 'success') {
-    ice.layers -= 1;
-    if (ice.layers === 0) crash(dive, node, false);
+  const strip = [0, 1, 1, 2][count];
+  if (strip) {
+    ice.layers = Math.max(0, ice.layers - strip);
+    if (ice.layers === 0) crash(dive, node);
     else {
-      say(dive, `${ATTACKS[approach]} strips a layer of the ${ice.name}. ${ice.layers} left.`);
-      emit(dive, 'hit');
+      say(dive, `${ATTACKS[approach]} strips ${strip === 2 ? 'two layers' : 'a layer'} of the ${ice.name}. ${ice.layers} left.`);
+      emit(dive, 'hit', { double: strip === 2 });
     }
     shiftBias(dive, approach);
   } else {
-    const hurt = Math.max(1, ice.counter - dive.firewall);
-    say(dive, `${resisted ? `The ${ice.name} resists ${ATTACKS[approach]}` : `${ATTACKS[approach]} fails`}. It hits back: −${hurt} cycles.`);
-    emit(dive, 'hurt', { amount: hurt });
-    spend(dive, hurt);
+    say(dive, `${ATTACKS[approach]} fails.`);
+  }
+  if (count <= 1) {
+    say(dive, `The ${ice.name} hits back: −${ice.counter} cycles.`);
+    emit(dive, 'hurt', { amount: ice.counter });
+    spend(dive, ice.counter);
   }
   spend(dive, 1);
   return dive;
@@ -313,7 +308,7 @@ function shiftBias(dive, approach) {
   }
 }
 
-function crash(dive, node, zeroDay) {
+function crash(dive, node) {
   const { ice } = node;
   node.kind = 'empty';
   dive.engaged = null;
@@ -324,8 +319,8 @@ function crash(dive, node, zeroDay) {
     return;
   }
   const got = gain(dive, ice.max * ice.pay * dive.layer);
-  say(dive, `${zeroDay ? 'Zero-day! ' : ''}The ${ice.name} crashes: ${got} data.`);
-  emit(dive, 'kill', { zeroDay });
+  say(dive, `The ${ice.name} crashes: ${got} data.`);
+  emit(dive, 'kill');
 }
 
 export function jackOut(dive) {
