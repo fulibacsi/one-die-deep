@@ -178,6 +178,25 @@ test('a trap rolls once, then stays on the map as a disarmed trap', () => {
   assert.equal(s.roll.n, rolls, 'walking back through does not roll again');
 });
 
+test('a potion found with a full belt is drunk on the spot, or lost at full HP', () => {
+  const s = G.newGame('warrior', 17);
+  const [first, second] = G.neighbors(s, s.pos);
+  for (const k of [first, second]) Object.assign(s.rooms[k], { kind: 'chest', enemy: null });
+  s.hero.potions = R.MAX_POTIONS;
+  s.hero.hp = G.maxHp(s) - 2;
+  forceRoll(s, R.LOOT_TABLE.indexOf('potion') + 1);
+  G.move(s, first);
+  assert.equal(s.hero.hp, G.maxHp(s), 'heals, capped at max HP');
+  assert.equal(s.hero.potions, R.MAX_POTIONS);
+  assert.ok(s.events.some((e) => e.type === 'heal' && e.amount === 2));
+
+  G.move(s, s.prev);
+  forceRoll(s, R.LOOT_TABLE.indexOf('potion') + 1);
+  G.move(s, second);
+  assert.equal(s.hero.potions, R.MAX_POTIONS);
+  assert.equal(s.log.at(-1), 'Your belt and your HP are full. The potion is lost.');
+});
+
 test('stairs lead down; the last floor has the boss, and beating it wins', () => {
   const s = G.newGame('warrior', 5);
   const stairs = Object.keys(s.rooms).find((k) => s.rooms[k].kind === 'stairs');
