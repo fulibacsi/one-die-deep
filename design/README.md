@@ -68,6 +68,26 @@ Under momentum the careful bot parks at an extreme for two-thirds of its
 attacks, where Bias can't move further. Under swing Bias stays in play. That
 makes swing the recommendation; the owner picks.
 
+### 2026-11-23: after playing v2
+
+The owner played v2, and it isn't fun yet. The upgrades are boring, fighting is
+tedious, and exploring is discouraged because going back costs cycles.
+
+- **Free backtracking.** Moving into a node you have already been to costs no
+  cycles. In the sim, 28–29% of the bot's moves went back through explored
+  nodes. With those free, the median number of dives to win drops by about 3:
+
+  | Shift | Bot | Before | After |
+  | --- | --- | --- | --- |
+  | Swing | careful | 15 | 12 |
+  | Swing | random | 20 | 16 |
+  | Momentum | careful | 14 | 11 |
+  | Momentum | random | 20 | 16 |
+
+  The bot explores by a fixed rule, so it doesn't explore more now that going
+  back is free. A player may.
+- **Still open:** the upgrades and the fights.
+
 ## Parked ideas
 
 - **Class passives** for every class, perhaps unlocked at the first level-up. They

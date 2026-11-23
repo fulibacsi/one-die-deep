@@ -44,6 +44,11 @@ const POLICIES = {
 
 function playDive(p, seed, policy, stats) {
   const dive = N.startDive(p, seed);
+  const go = (k) => {
+    stats.moves += 1;
+    if (dive.rooms[k].visited) stats.backtracks += 1;
+    N.move(dive, k);
+  };
   for (let i = 0; i < 500 && !dive.over; i++) {
     if (N.mode(dive) === 'ice') {
       const ice = dive.rooms[dive.engaged].ice;
@@ -55,11 +60,11 @@ function playDive(p, seed, policy, stats) {
     }
     const here = dive.rooms[dive.pos];
     const next = dive.cycles < 6 ? null : stepToward(dive, (n) => !n.visited);
-    if (next) N.move(dive, next);
+    if (next) go(next);
     else if (here.kind === 'uplink') N.descend(dive);
     else {
-      const go = stepToward(dive, (n) => n.kind === 'uplink' || n.ice?.core) ?? stepToward(dive, (n) => !n.visited);
-      if (go) N.move(dive, go);
+      const to = stepToward(dive, (n) => n.kind === 'uplink' || n.ice?.core) ?? stepToward(dive, (n) => !n.visited);
+      if (to) go(to);
       else N.jackOut(dive);
     }
   }
@@ -69,7 +74,7 @@ function playDive(p, seed, policy, stats) {
 
 function run(shift, policy) {
   const results = [];
-  const stats = { attempts: 0, landed: 0, extreme: 0 };
+  const stats = { attempts: 0, landed: 0, extreme: 0, moves: 0, backtracks: 0 };
   for (let s = 1; s <= profiles; s++) {
     const p = N.newProfile();
     N.setShift(p, shift);
@@ -89,7 +94,7 @@ function run(shift, policy) {
   results.sort((a, b) => a - b);
   const q = (f) => results[Math.floor(f * (results.length - 1))];
   const pct = (n, d) => `${Math.round((100 * n) / d)}%`;
-  return `${shift.padEnd(9)} ${policy.padEnd(8)} won ${pct(results.filter(Number.isFinite).length, profiles).padStart(4)}  dives p10/median/p90 ${q(0.1)}/${q(0.5)}/${q(0.9)}  attacks land ${pct(stats.landed, stats.attempts)}  at Bias 2 or 5 ${pct(stats.extreme, stats.attempts)}`;
+  return `${shift.padEnd(9)} ${policy.padEnd(8)} won ${pct(results.filter(Number.isFinite).length, profiles).padStart(4)}  dives p10/median/p90 ${q(0.1)}/${q(0.5)}/${q(0.9)}  attacks land ${pct(stats.landed, stats.attempts)}  at Bias 2 or 5 ${pct(stats.extreme, stats.attempts)}  moves back ${pct(stats.backtracks, stats.moves)}`;
 }
 
 console.log(`${profiles} profiles per row, starting Bias ${N.START.bias}, capped at ${CAP} dives`);
