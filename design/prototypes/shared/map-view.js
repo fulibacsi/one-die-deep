@@ -8,9 +8,10 @@ const ROOM = 64;
 /**
  * rooms: { k: { x, y, seen, visited } }, pos: current key,
  * glyph(room, k) -> SVG drawn around 0,0, hero: SVG around 0,0,
- * reachable: Set of keys you can move to, shape: 'square' | 'circle'.
+ * reachable: Set of keys you can move to, next: those of them one step away,
+ * shape: 'square' | 'circle'.
  */
-export function mapSvg({ rooms, pos, glyph, hero, reachable = new Set(), shape = 'square', label = 'Map' }) {
+export function mapSvg({ rooms, pos, glyph, hero, reachable = new Set(), next = new Set(), shape = 'square', label = 'Map' }) {
   let doors = '';
   let cells = '';
   for (const [k, room] of Object.entries(rooms)) {
@@ -32,7 +33,7 @@ export function mapSvg({ rooms, pos, glyph, hero, reachable = new Set(), shape =
     const inner = `${body}${g ? `<g transform="translate(${cx + (k === pos ? 12 : 0)} ${cy + (k === pos ? 6 : 0)}) scale(${k === pos ? 0.7 : 1})">${g}</g>` : ''}`;
     const heroAt = k === pos ? `<g transform="translate(${g ? cx - 14 : cx} ${g ? cy - 12 : cy}) scale(${g ? 0.7 : 1})">${hero}</g>` : '';
     cells += reachable.has(k)
-      ? `<g class="reach" data-room="${k}" tabindex="0" role="button" aria-label="Move here">${inner}${heroAt}</g>`
+      ? `<g class="reach${next.has(k) ? ' next' : ''}" data-room="${k}" tabindex="0" role="button" aria-label="Move here">${inner}${heroAt}</g>`
       : `<g>${inner}${heroAt}</g>`;
   }
   const all = Object.values(rooms);

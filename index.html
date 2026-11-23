@@ -230,9 +230,9 @@ button { font: inherit; color: inherit; }
 .log li:first-child { color: var(--ink); }
 .kit-head, .kit-log, #details { display: none; }
 
-/* Touch screens: show where you can move, and drop keyboard hints. */
+/* Touch screens: show the rooms one step away, and drop keyboard hints. */
 @media (hover: none) {
-  .map-wrap .reach .room { stroke: var(--hero); }
+  .map-wrap .reach.next .room { stroke: var(--hero); }
 }
 @media (pointer: coarse) {
   .btn kbd { display: none; }

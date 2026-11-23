@@ -86,6 +86,9 @@ tedious, and exploring is discouraged because going back costs cycles.
 
   The bot explores by a fixed rule, so it doesn't explore more now that going
   back is free. A player may.
+- **Tap to travel**, in the game too. Tapping a node further away walks there one
+  step at a time, through the nodes you have been to. On touch screens only the
+  nodes one step away are highlighted.
 - **Still open:** the upgrades and the fights.
 
 ## Parked ideas

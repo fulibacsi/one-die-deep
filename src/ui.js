@@ -126,7 +126,12 @@ const CELL = 100;
 const ROOM = 66;
 
 function renderMap() {
-  const reachable = new Set(G.mode(state) === 'explore' ? G.neighbors(state, state.pos) : []);
+  // Every room you can walk to; the ones next to you are one step away.
+  const routes = new Map();
+  for (const k of Object.keys(state.rooms)) {
+    const steps = G.route(state, k);
+    if (steps) routes.set(k, steps);
+  }
   const sameFloor = fx?.before && fx.before.floor === state.floor;
   const fresh = (k) => sameFloor && !fx.before.seen.has(k);
   const moved = [...happened('move'), ...happened('escape')].at(-1);
@@ -167,8 +172,8 @@ function renderMap() {
     }
     const tip = `<title>${esc(roomTip(room))}</title>`;
     const cls = fresh(k) ? ' class="fresh"' : '';
-    rooms += reachable.has(k)
-      ? `<g class="reach${fresh(k) ? ' fresh' : ''}" data-room="${k}" tabindex="0" role="button" aria-label="Move to: ${esc(roomTip(room))}">${tip}${inner}</g>`
+    rooms += routes.has(k)
+      ? `<g class="reach${routes.get(k).length === 1 ? ' next' : ''}${fresh(k) ? ' fresh' : ''}" data-room="${k}" tabindex="0" role="button" aria-label="Move to: ${esc(roomTip(room))}">${tip}${inner}</g>`
       : `<g${cls}>${tip}${inner}</g>`;
   }
 
@@ -345,7 +350,7 @@ function exploreHtml() {
   return {
     head: `<h2>${stairs ? 'Stairs down' : `Floor ${state.floor}`}</h2>`,
     actions: `<div class="actions">
-      <p class="note">Move with the arrow keys, or tap a room next to yours. Rooms you can see show what waits inside, except traps.</p>
+      <p class="note">Move with the arrow keys, or tap a room to walk there through the rooms you've explored. Rooms you can see show what waits inside, except traps.</p>
       <div class="row">${stairs ? `<button class="btn primary" type="button" data-act="descend">Descend to floor ${state.floor + 1} <kbd>D</kbd></button>` : ''}${potionButton()}</div>
     </div>`,
   };
@@ -478,24 +483,44 @@ function render() {
 // ---------- input ----------
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const STEP_MS = 200; // one step of a walk, as long as the hero's glide
 
 async function act(fn) {
   if (busy || !state) return;
+  busy = true;
+  await show(fn);
+  busy = false;
+}
+
+// Runs one engine action and shows what it did.
+async function show(fn) {
   const before = snapshot();
   const rollBefore = state.roll?.n ?? 0;
   fn(state);
   const rolled = (state.roll?.n ?? 0) !== rollBefore ? state.roll.n : null;
-  busy = true;
   if (rolled) await spin(state.roll.die);
   // Leaving a floor: the old map sinks away before the new one is drawn.
   if (state.events.some((e) => e.type === 'descend') && !reduceMotion) {
     document.querySelector('.map-wrap')?.classList.add('leaving');
     await wait(260);
   }
-  busy = false;
   fx = { before, events: state.events, rolled };
   render();
   S.playEvents(state.events);
+}
+
+// Walks to a room one move at a time, and stops if a move leads into
+// anything but more exploring.
+async function travel(k) {
+  const steps = state && G.route(state, k);
+  if (busy || !steps) return;
+  busy = true;
+  for (const [i, step] of steps.entries()) {
+    if (i) await wait(STEP_MS);
+    await show((s) => G.move(s, step));
+    if (state.pos !== step || G.mode(state) !== 'explore') break;
+  }
+  busy = false;
 }
 
 function spin(face) {
@@ -547,7 +572,7 @@ screen.addEventListener('click', (e) => {
     picking = false;
     render();
   } else if (name) act(ACTIONS[name]);
-  else if (room) act((s) => G.move(s, room));
+  else if (room) travel(room);
   else if (skill) act((s) => G.useSkill(s, skill));
   else if (stat) act((s) => G.chooseStat(s, stat));
 });
@@ -597,7 +622,7 @@ document.addEventListener('keydown', (e) => {
   const room = e.target.closest?.('[data-room]');
   if (room && (key === 'Enter' || key === ' ')) {
     e.preventDefault();
-    act((s) => G.move(s, room.dataset.room));
+    travel(room.dataset.room);
     return;
   }
   if (e.target.closest?.('button')) {

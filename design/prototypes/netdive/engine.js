@@ -185,6 +185,31 @@ export function canMove(dive, k) {
   return mode(dive) === 'explore' && neighbors(dive.rooms, dive.pos).includes(k);
 }
 
+/**
+ * The shortest walk to a node you can see, as the nodes to step into in turn.
+ * It only passes through nodes you've been to; the last step may be into
+ * anything. Null when there's no such walk.
+ */
+export function route(dive, k) {
+  if (mode(dive) !== 'explore' || !dive.rooms[k]?.seen || k === dive.pos) return null;
+  const from = { [dive.pos]: null };
+  const queue = [dive.pos];
+  while (queue.length) {
+    const at = queue.shift();
+    for (const n of neighbors(dive.rooms, at)) {
+      if (n in from || !dive.rooms[n].seen) continue;
+      from[n] = at;
+      if (n === k) {
+        const steps = [];
+        for (let step = k; step !== dive.pos; step = from[step]) steps.unshift(step);
+        return steps;
+      }
+      if (dive.rooms[n].visited) queue.push(n);
+    }
+  }
+  return null;
+}
+
 export function move(dive, k) {
   dive.events = [];
   if (!canMove(dive, k)) return dive;

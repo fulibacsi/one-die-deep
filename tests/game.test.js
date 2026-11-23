@@ -149,6 +149,44 @@ test('Riposte hits exactly when the roll blocks; Shadowstep cannot be hurt and i
   assert.equal(G.enemy(step(3, { defense: 1 })).hp, 3, 'a hit crits for 2');
 });
 
+// A 1×4 corridor floor, every room empty and seen, the hero at the west end.
+function corridor() {
+  const s = G.newGame('warrior', 7);
+  s.rooms = {};
+  for (let x = 0; x < 4; x++) s.rooms[G.key(x, 0)] = { x, y: 0, kind: 'empty', seen: true, visited: x < 3, enemy: null };
+  s.pos = G.key(0, 0);
+  return s;
+}
+
+test('a route walks through explored rooms to any room you can see', () => {
+  const s = corridor();
+  assert.deepEqual(G.route(s, '3,0'), ['1,0', '2,0', '3,0']);
+  assert.deepEqual(G.route(s, '1,0'), ['1,0']);
+  assert.equal(G.route(s, '0,0'), null, 'not to where you stand');
+  for (const step of G.route(s, '3,0')) G.move(s, step);
+  assert.equal(s.pos, '3,0');
+  assert.ok(s.rooms['3,0'].visited);
+});
+
+test('a route never passes through an unexplored room or a foe, but may end at one', () => {
+  const s = corridor();
+  s.rooms['1,0'].visited = false;
+  assert.equal(G.route(s, '2,0'), null);
+  assert.deepEqual(G.route(s, '1,0'), ['1,0']);
+
+  const t = corridor();
+  t.rooms['2,0'].kind = 'monster';
+  t.rooms['2,0'].enemy = { name: 'Dummy', attack: 6, defense: 5, hp: 3, maxHp: 3, dmg: 1, xp: 1, elite: false, boss: false };
+  assert.equal(G.route(t, '3,0'), null);
+  assert.deepEqual(G.route(t, '2,0'), ['1,0', '2,0']);
+
+  const u = corridor();
+  u.rooms['3,0'].seen = false;
+  assert.equal(G.route(u, '3,0'), null, 'not to a room you cannot see');
+  u.combat = { fight: {} };
+  assert.equal(G.route(u, '1,0'), null, 'not during a fight');
+});
+
 test('a successful flee returns you to the room you came from', () => {
   const t = forceRoll(fight(), 6);
   const back = t.prev;
