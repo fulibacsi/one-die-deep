@@ -35,7 +35,16 @@ body { background: repeating-linear-gradient(var(--bg) 0 48px, var(--stripe) 48p
 .dive { grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "hud hud" "map panel"; height: 100%; }
 @media (max-width: 760px) {
   .hub { grid-template-columns: minmax(0, 1fr); overflow: auto; }
-  .dive { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(140px, 1fr) auto; grid-template-areas: "hud" "map" "panel"; }
+  .dive { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(220px, 1fr) auto; grid-template-areas: "hud" "map" "panel"; gap: 8px; }
+  /* Phones: one-line header, a tighter console, the map gets the room. */
+  .top { flex-wrap: nowrap; gap: 8px; }
+  .top h1 { font-size: 28px; }
+  .top .btn { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+  .back { font-size: 12px; white-space: nowrap; }
+  .hud { padding: 8px 10px; gap: 6px 14px; }
+  .panel { gap: 8px; padding: 10px 12px; }
+  .panel .note { font-size: 12px; }
+  .panel .log li:not(:first-child) { display: none; }
 }
 .hud { grid-area: hud; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding: 10px 14px; }
 .hud .grow { flex: 1 1 160px; display: grid; gap: 4px; }
@@ -48,7 +57,7 @@ body { background: repeating-linear-gradient(var(--bg) 0 48px, var(--stripe) 48p
 .strip span { text-align: center; font-weight: 600; padding: 4px 0; border: 1.5px solid var(--fg); }
 .strip .brk { background: var(--accent); color: var(--raised); }
 .strip .zd { background: var(--zero); color: var(--raised); }
-.strip .gh { background: transparent; }
+.strip .spf { background: transparent; }
 .legend { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--soft); }
 
 .ups { display: grid; gap: 8px; }
@@ -68,7 +77,7 @@ body { background: repeating-linear-gradient(var(--bg) 0 48px, var(--stripe) 48p
 .map .reach:hover .room { fill: var(--line); }
 @media (hover: none) { .map .reach .room { stroke: var(--accent); } }
 .g-ice { fill: var(--bad); }
-.g-ice-off { fill: none; stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 4 3; }
+.g-tag { fill: var(--soft); font-family: var(--font-mono); font-size: 18px; }
 .g-ink { fill: none; stroke: var(--fg); stroke-width: 3.5; }
 .g-soft { fill: none; stroke: var(--soft); stroke-width: 3; }
 .g-hero { fill: var(--accent); }

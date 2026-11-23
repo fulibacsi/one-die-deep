@@ -1,10 +1,13 @@
-// NETDIVE: how many dives a greedy bot needs to crack the Core.
-// Usage: node tests/balance/prototypes/netdive.js [profiles, default 300] [bias policy: 3|2|4|5]
+// NETDIVE: dives to crack the Core, for each Bias-shift variant and two
+// players: a careful bot (picks the attack that isn't resisted and has the
+// better odds) and a random one. The gap between them shows how much the
+// choice of attack matters.
+// Usage: node tests/balance/prototypes/netdive.js [profiles, default 300]
 import * as N from '../../../design/prototypes/netdive/engine.js';
 import { neighbors } from '../../../design/prototypes/shared/dice.js';
 
 const profiles = Number(process.argv[2] ?? 300);
-const wantBias = Number(process.argv[3] ?? 3);
+const CAP = 200;
 
 function stepToward(dive, goal) {
   const seen = new Set([dive.pos]);
@@ -23,18 +26,35 @@ function stepToward(dive, goal) {
   return null;
 }
 
-function playDive(p, seed) {
+// Chance an attack lands at the dive's current Bias.
+function odds(dive, approach, ice) {
+  let faces = 0;
+  for (let die = 1; die <= 6; die++) {
+    const zero = N.zeroDays(dive).includes(die);
+    const win = approach === 'break' ? die < dive.bias : die > dive.bias;
+    if (zero || (N.resists(ice) !== approach && win)) faces += 1;
+  }
+  return faces / 6;
+}
+
+const POLICIES = {
+  careful: (dive, ice) => (odds(dive, 'break', ice) >= odds(dive, 'spoof', ice) ? 'break' : 'spoof'),
+  random: () => (Math.random() < 0.5 ? 'break' : 'spoof'),
+};
+
+function playDive(p, seed, policy, stats) {
   const dive = N.startDive(p, seed);
   for (let i = 0; i < 500 && !dive.over; i++) {
-    const m = N.mode(dive);
-    if (m === 'ice') {
+    if (N.mode(dive) === 'ice') {
       const ice = dive.rooms[dive.engaged].ice;
-      N.attempt(dive, ice.core || (ice.layers === 1 && dive.cycles > 4) ? 'break' : 'ghost');
+      if (dive.bias === N.BIAS_MIN || dive.bias === N.BIAS_MAX) stats.extreme += 1;
+      N.attempt(dive, POLICIES[policy](dive, ice));
+      stats.attempts += 1;
+      if (dive.roll.outcome !== 'fail') stats.landed += 1;
       continue;
     }
     const here = dive.rooms[dive.pos];
-    const hurry = dive.cycles < 6;
-    const next = hurry ? null : stepToward(dive, (n) => !n.visited);
+    const next = dive.cycles < 6 ? null : stepToward(dive, (n) => !n.visited);
     if (next) N.move(dive, next);
     else if (here.kind === 'uplink') N.descend(dive);
     else {
@@ -47,30 +67,30 @@ function playDive(p, seed) {
   return dive;
 }
 
-const results = [];
-let affordable = 0;
-let shopVisits = 0;
-for (let s = 1; s <= profiles; s++) {
-  const p = N.newProfile();
-  let dives = 0;
-  while (!p.won && dives < 300) {
-    shopVisits += 1;
-    if (Object.keys(N.UPGRADES).some((id) => N.canBuy(p, id))) affordable += 1;
-    for (;;) {
-      const options = Object.keys(N.UPGRADES).filter((id) => N.canBuy(p, id));
-      if (!options.length) break;
-      options.sort((a, b) => N.cost(a, p.levels[a]) - N.cost(b, p.levels[b]));
-      N.buy(p, options[0]);
+function run(shift, policy) {
+  const results = [];
+  const stats = { attempts: 0, landed: 0, extreme: 0 };
+  for (let s = 1; s <= profiles; s++) {
+    const p = N.newProfile();
+    N.setShift(p, shift);
+    let dives = 0;
+    while (!p.won && dives < CAP) {
+      for (;;) {
+        const options = Object.keys(N.UPGRADES).filter((id) => N.canBuy(p, id));
+        if (!options.length) break;
+        options.sort((a, b) => N.cost(a, p.levels[a]) - N.cost(b, p.levels[b]));
+        N.buy(p, options[0]);
+      }
+      N.settle(p, playDive(p, s * 1000 + dives, policy, stats));
+      dives += 1;
     }
-    N.setBias(p, wantBias);
-    N.settle(p, playDive(p, s * 1000 + dives));
-    dives += 1;
+    results.push(p.won ? dives : Infinity);
   }
-  results.push(p.won ? dives : Infinity);
+  results.sort((a, b) => a - b);
+  const q = (f) => results[Math.floor(f * (results.length - 1))];
+  const pct = (n, d) => `${Math.round((100 * n) / d)}%`;
+  return `${shift.padEnd(9)} ${policy.padEnd(8)} won ${pct(results.filter(Number.isFinite).length, profiles).padStart(4)}  dives p10/median/p90 ${q(0.1)}/${q(0.5)}/${q(0.9)}  attacks land ${pct(stats.landed, stats.attempts)}  at Bias 2 or 5 ${pct(stats.extreme, stats.attempts)}`;
 }
-results.sort((a, b) => a - b);
-const q = (f) => results[Math.floor(f * (results.length - 1))];
-const won = results.filter(Number.isFinite).length;
-console.log(`${profiles} profiles, bias ${wantBias}: cracked the Core in ${won}/${profiles}`);
-console.log(`dives to win: p10 ${q(0.1)}, median ${q(0.5)}, p90 ${q(0.9)}`);
-console.log(`an upgrade was affordable before ${((100 * affordable) / shopVisits).toFixed(0)}% of dives`);
+
+console.log(`${profiles} profiles per row, starting Bias ${N.START.bias}, capped at ${CAP} dives`);
+for (const shift of Object.keys(N.SHIFTS)) for (const policy of Object.keys(POLICIES)) console.log(run(shift, policy));
