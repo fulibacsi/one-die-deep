@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HIGH ROLLER</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Limelight&family=DM+Sans:wght@400;600&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+/* Layout: a playing card by day, green felt by night. Your die's six faces
+   run along the top: they are your whole character. Map and table below. */
+:root {
+  --bg: #f1efea; --raised: #fffdf8; --fg: #1b1a1f; --soft: #6b6870; --line: #dcd7cc;
+  --accent: #b0172c; --good: #1d7a4e; --bad: #b0172c; --gold: #9a6b0a; --hit: #b0172c; --guard: #1b1a1f; --heal: #1d7a4e;
+  --font-display: 'Limelight', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b2a20; --raised: #0f3528; --fg: #f3ead2; --soft: #a7b5a3; --line: #1f4a3a;
+    --accent: #e3b341; --good: #8fe0a8; --bad: #ff8a7a; --gold: #e3b341; --hit: #ff8a7a; --guard: #f3ead2; --heal: #8fe0a8; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b2a20; --raised: #0f3528; --fg: #f3ead2; --soft: #a7b5a3; --line: #1f4a3a;
+  --accent: #e3b341; --good: #8fe0a8; --bad: #ff8a7a; --gold: #e3b341; --hit: #ff8a7a; --guard: #f3ead2; --heal: #8fe0a8; color-scheme: dark;
+}
+.top h1 { font-size: clamp(26px, 5.5vw, 38px); letter-spacing: 0.04em; }
+
+.screen { min-height: 0; display: grid; gap: 12px; align-content: start; }
+.lobby { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); overflow: auto; }
+.run { grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "hud hud" "map panel"; height: 100%; }
+@media (max-width: 760px) {
+  .lobby { grid-template-columns: minmax(0, 1fr); }
+  .run { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(130px, 1fr) auto; grid-template-areas: "hud" "map" "panel"; }
+}
+.hud { grid-area: hud; display: grid; gap: 8px; padding: 10px 14px; }
+.hud .line { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: center; }
+.map { grid-area: map; min-height: 0; display: flex; justify-content: center; }
+.map svg { width: 100%; height: 100%; max-height: 620px; }
+.panel { grid-area: panel; display: grid; gap: 12px; align-content: start; align-self: start; }
+.panel h2, .box h2 { margin: 0; font-size: 18px; }
+.chips { font-family: var(--font-mono); color: var(--gold); font-weight: 500; }
+
+.faces { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; max-width: 440px; }
+.face {
+  display: grid; place-items: center; gap: 0; aspect-ratio: 1; max-height: 64px; padding: 2px;
+  border: 1.5px solid var(--fg); background: var(--raised); border-radius: 10px;
+  font-family: var(--font-mono); font-size: clamp(10px, 2.6vw, 13px); text-align: center; line-height: 1.1;
+}
+.face small { font-size: 0.8em; color: var(--soft); }
+.face.k-hit { color: var(--hit); } .face.k-heal { color: var(--heal); } .face.k-chip { color: var(--gold); }
+.face.k-block, .face.k-parry { color: var(--guard); font-weight: 500; }
+.face.k-parry { border-width: 3px; }
+.face.k-blank { color: var(--soft); border-style: dashed; }
+.face.lit { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.face { cursor: pointer; }
+button.face:hover { background: var(--line); }
+
+.ups { display: grid; gap: 8px; }
+.up { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; border: 1.5px solid var(--line); padding: 8px 10px; }
+.up .note { grid-column: 1; }
+.up .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 96px; }
+.lv { font-size: 11px; color: var(--soft); }
+
+.map .room { fill: var(--raised); stroke: var(--fg); stroke-width: 3; }
+.map .room.unknown { fill: none; stroke: var(--soft); stroke-dasharray: 6 5; }
+.map .room.here { stroke: var(--accent); stroke-width: 5; }
+.map .door { stroke: var(--fg); stroke-width: 5; }
+.map .door.unknown { stroke: var(--soft); stroke-width: 2.5; stroke-dasharray: 4 4; }
+.map .reach { cursor: pointer; }
+.map .reach .room { pointer-events: all; }
+.map .reach:hover .room { fill: var(--line); }
+@media (hover: none) { .map .reach .room { stroke: var(--accent); } }
+.g-foe { fill: var(--bad); }
+.g-num { fill: var(--raised); font-family: var(--font-mono); font-size: 15px; font-weight: 500; }
+.g-ink { fill: none; stroke: var(--fg); stroke-width: 3.5; }
+.g-soft { fill: none; stroke: var(--soft); stroke-width: 3; }
+.g-hero { fill: var(--gold); }
+
+.result { display: flex; gap: 14px; align-items: center; }
+.what { font-family: var(--font-mono); font-size: 16px; font-weight: 500; }
+.offer { display: flex; gap: 12px; align-items: center; }
+.offer .face { width: 64px; }
+.hp { display: flex; gap: 3px; flex-wrap: wrap; }
+.hp i { width: 12px; height: 12px; transform: rotate(45deg); background: var(--bad); }
+.hp i.off { background: var(--line); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>High Roller</h1>
+    <a class="back" href="../index.html">← All prototypes</a>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="sound" type="button" aria-pressed="true">Sound on</button>
+  </header>
+  <main id="screen" class="screen"></main>
+</div>
+<script type="module" src="ui.js"></script>
+</body>
+</html>

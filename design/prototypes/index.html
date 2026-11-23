@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>One Die Deep Prototypes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the main game's graph paper; one card per prototype, each card
+   stating the three choices it makes (theme, genre, mechanic). */
+:root {
+  --bg: #edf1f4; --raised: #f9fbfc; --grid: #dae2e9; --fg: #17273a; --soft: #5b6c7e; --line: #b4c2ce; --accent: #c9701a;
+  --font-display: 'Saira Stencil One', 'Archivo', system-ui, sans-serif;
+  --font-body: 'Archivo', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0d2134; --raised: #11293f; --grid: #163550; --fg: #dbe8f2; --soft: #8fa7bb; --line: #2a4e6d; --accent: #f2b443; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0d2134; --raised: #11293f; --grid: #163550; --fg: #dbe8f2; --soft: #8fa7bb; --line: #2a4e6d; --accent: #f2b443; color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 22px; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 46px); line-height: 1; }
+.lede { margin: 0; max-width: 64ch; color: var(--soft); }
+.lede a { color: var(--fg); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+.card { background: var(--raised); border: 1.5px solid var(--fg); padding: 18px; display: grid; gap: 12px; align-content: start; }
+.card h2 { margin: 0; font-size: 22px; letter-spacing: 0.04em; }
+.card p { margin: 0; }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+dt { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--soft); padding-top: 3px; }
+dd { margin: 0; }
+.sim { font-size: 13px; color: var(--soft); border-top: 1.5px solid var(--line); padding-top: 10px; }
+.status { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.status.off { color: var(--soft); }
+.play { justify-self: start; display: inline-block; padding: 10px 18px; background: var(--fg); color: var(--raised); text-decoration: none; font-weight: 600; }
+.play:hover { background: var(--soft); }
+.play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>One Die Deep: three directions</h1>
+  <p class="lede">Each prototype keeps the single d6 and changes three things at once: the theme, the genre and one core mechanic. They are small and rough on purpose; the point is to feel the difference. Progress in NETDIVE and High Roller is saved in this browser. Decisions about each are in the design folder's README. <a href="../../index.html">Back to One Die Deep</a>.</p>
+  <div class="cards">
+    <article class="card">
+      <h2>NETDIVE</h2>
+      <p class="status">Active: being explored further</p>
+      <dl><dt>Theme</dt><dd>Hacking a corporate network</dd><dt>Genre</dt><dd>Incremental: time-limited dives, permanent upgrades</dd><dt>Mechanic</dt><dd>One stat, Lasers &amp; Feelings style</dd></dl>
+      <p>Your only stat is Bias. Break ICE on a roll under it (and get paid), ghost past on a roll over it, and a roll equal to it is a zero-day. Every dive ends when your cycles run out; you keep the data and upgrade your rig.</p>
+      <p class="sim">Sim: a greedy bot cracks the Core in a median of 18 dives (Bias 2 to 5: 18 to 20).</p>
+      <a class="play" href="netdive/index.html">Play NETDIVE</a>
+    </article>
+    <article class="card">
+      <h2>SONAR</h2>
+      <p class="status off">Abandoned: not pursued</p>
+      <dl><dt>Theme</dt><dd>A submarine in a deep-sea trench</dd><dt>Genre</dt><dd>Dungeon minesweeper</dd><dt>Mechanic</dt><dd>No stats, only a level</dd></dl>
+      <p>Ping cells of a dark 8×8 trench. Open water echoes the total power of the creatures around it. Pinging a creature fights it: the hull takes its power minus your roll. Level-ups repair the hull, so the puzzle is the order of your fights.</p>
+      <p class="sim">Sim: reading the echoes wins 49–52%, pinging blind 30%.</p>
+      <a class="play" href="sonar/index.html">Play SONAR</a>
+    </article>
+    <article class="card">
+      <h2>High Roller</h2>
+      <p class="status off">Abandoned: similar games already exist</p>
+      <dl><dt>Theme</dt><dd>A casino heist</dd><dt>Genre</dt><dd>Roguelite with permanent upgrades</dd><dt>Mechanic</dt><dd>The die is the character; loot is new faces</dd></dl>
+      <p>No stats: your d6's six faces are hit, block, parry, heal, chip or blank. Roll, then keep the face or pay a chip to reroll. Safes give new faces to swap in. Chips you don't spend are yours to keep for upgrades.</p>
+      <p class="sim">Sim: run 1 wins 9%, run 5 53%, run 10 77%.</p>
+      <a class="play" href="high-roller/index.html">Play High Roller</a>
+    </article>
+  </div>
+</div>
+</body>
+</html>
