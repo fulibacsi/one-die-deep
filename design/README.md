@@ -30,7 +30,7 @@ keeping the single d6. The write-up is
 
 | Prototype | Theme, genre, mechanic | Status | Decision and reason |
 | --- | --- | --- | --- |
-| [NETDIVE](prototypes/netdive/) | Hacking; incremental; one stat (Bias) | Active, see v2 below | Explore further. It misses the core of a single moving value: a successful roll should shift your Bias. Ghosting past ICE (skipping) is the wrong action: it should be a second kind of attack, and ICE should resist different attacks. |
+| [NETDIVE](prototypes/netdive/) | Hacking; incremental; one stat (Bias) | Active, see v2 and v3 below | Explore further. It misses the core of a single moving value: a successful roll should shift your Bias. Ghosting past ICE (skipping) is the wrong action: it should be a second kind of attack, and ICE should resist different attacks. |
 | [SONAR](prototypes/sonar/) | Deep sea; dungeon minesweeper; level only | Abandoned | Unplayable on a phone, and the direction isn't pursued. On phones the board covered the panel below it; that layout bug is fixed here so the prototype stays playable. |
 | [High Roller](prototypes/high-roller/) | Casino heist; roguelite; the die is the character | Abandoned | A game with the same mechanics was released in November 2026, and acclaimed games with very similar gameplay already exist. |
 
@@ -90,6 +90,56 @@ tedious, and exploring is discouraged because going back costs cycles.
   step at a time, through the nodes you have been to. On touch screens only the
   nodes one step away are highlighted.
 - **Still open:** the upgrades and the fights.
+
+### 2026-11-23: NETDIVE v3, Lasers & Feelings dice
+
+The owner's answers: each fight is dull (not too many of them), one-time
+programs don't appeal, and Lasers & Feelings' multi-dice roll has potential.
+Built to the owner's choices:
+
+- **Pick, then roll.** Choose Break or Spoof, then roll that attack's dice. Each
+  die under your Bias is a hit for Break, each one over it a hit for Spoof, and
+  your Bias exactly is a zero-day: a hit for either.
+- **The Lasers & Feelings ladder.** 0 hits: fail, and the ICE hits back. 1 hit:
+  strip a layer, but the ICE hits back. 2 hits: strip a layer clean. 3 hits: strip
+  two layers.
+- **Dice come from expertise.** You roll 1 die, +1 per level of Break or Spoof
+  expertise, up to 3. These replace the flat upgrades (Battery, Buffer,
+  Compressor, Firewall). Bias tuner, Relay and Exploit kit stay. Without Battery,
+  every dive has 28 cycles.
+- **No resistance**, as in Lasers & Feelings. ICE differs in layers and in how hard
+  it hits back, which the map shows under each.
+- Bias still moves by one when an attack hits, by the swing or momentum setting.
+  Saves from v2 don't carry over.
+- **More than one die.** This is the first prototype to roll several dice at once,
+  up to three d6, so it leaves "a single d6" behind. Traces and caches still roll
+  one die.
+
+`node tests/balance/prototypes/netdive.js`, 300 profiles per row. "Real choice"
+counts attacks where neither option is at least as likely as the other to get
+1, 2 and 3 hits:
+
+| Shift | Bot | Dives to win (median) | Hits 0 / 1 / 2 / 3 | Real choice | Attacks made at Bias 2 or 5 |
+| --- | --- | --- | --- | --- | --- |
+| Swing | careful | 18 | 5% / 22% / 38% / 34% | 4% | 35% |
+| Swing | random | 31 | 10% / 26% / 34% / 31% | 2% | 42% |
+| Momentum | careful | 10 | 3% / 16% / 22% / 58% | 1% | 83% |
+| Momentum | random | 33 | 10% / 25% / 32% / 32% | 1% | 49% |
+
+What it shows:
+
+- **The ladder gives fights texture.** Under swing, a careful player's attacks
+  fail outright only 5% of the time, and the other results are spread across 1, 2
+  and 3 hits.
+- **Picking matters, but the right pick is obvious.** Picking at random takes
+  about twice as many dives. Yet at almost every roll, one attack is at least as
+  good for 1, 2 and 3 hits: the one with more dice times more faces. With the same
+  sim and Spoof expertise bought last, so the pools differ for longer, real
+  choices rise to 10%.
+- **Momentum breaks.** The careful bot parks at Bias 2 or 5 for 83% of its
+  attacks and gets 3 hits 58% of the time.
+
+Still open: making the choice of attack a real one on each roll.
 
 ## Parked ideas
 

@@ -85,6 +85,13 @@ body { background: repeating-linear-gradient(var(--bg) 0 48px, var(--stripe) 48p
 
 .result { display: flex; gap: 14px; align-items: center; }
 .result .what { font-weight: 600; font-size: 16px; text-transform: uppercase; }
+.dice { display: flex; gap: 6px; flex: none; }
+.dice .die { width: 48px; height: 48px; padding: 7px; border-radius: 10px; }
+.dice .die i { width: 8px; height: 8px; }
+.dice .die.hit { border-color: var(--good); box-shadow: inset 0 0 0 2px var(--good); }
+.dice .die.hit.zd { border-color: var(--zero); box-shadow: inset 0 0 0 2px var(--zero); }
+.dice .die.miss { opacity: 0.4; }
+.btn.attack { display: grid; gap: 2px; justify-items: center; }
 .ok { color: var(--good); } .bad { color: var(--bad); } .zero { color: var(--zero); }
 .layers { display: flex; gap: 3px; }
 .layers i { width: 14px; height: 14px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--bad); }

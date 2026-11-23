@@ -3,17 +3,17 @@ import { dieHtml, spin, store } from '../shared/dice.js';
 import { mapSvg, neighbors } from '../shared/map-view.js';
 import * as S from '../../../src/sound.js';
 
-const SAVE = 'netdive:profile';
+const SAVE = 'netdive:v3'; // v3 rolls dice pools; earlier saves don't carry over
 const screen = document.getElementById('screen');
 const soundBtn = document.getElementById('sound');
 
 let profile = store.get(SAVE, null) ?? N.newProfile();
-profile.shift ??= 'swing'; // profiles saved by the first version had no setting
 let dive = null;
 let busy = false;
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const range = (a, b) => (a > b ? 'never' : a === b ? `${a}` : `${a}–${b}`);
+const dice = (n) => `${n} ${n === 1 ? 'die' : 'dice'}`;
 
 // The single stat, drawn as the six faces of the die.
 function strip(bias, zeroDays) {
@@ -51,8 +51,9 @@ function hubHtml() {
       <h2>${profile.won ? 'Core cracked. The network is yours.' : 'Your rig'}</h2>
       ${intro}
       <div><span class="label">Bias</span> <span class="num" style="font-size:22px">${profile.bias}</span></div>
-      <p class="note">One stat, two attacks. <b>Break</b> lands on a roll under your Bias, <b>Spoof</b> on a roll over it, and rolling your Bias exactly is a zero-day that crashes any ICE. Walls resist Spoof, sentries resist Break. Every hit moves your Bias by one, so the next roll is never the same.</p>
+      <p class="note">One stat, two attacks, rolled as in Lasers &amp; Feelings. Pick one, then roll its dice: each die under your Bias is a hit for <b>Break</b>, each one over it a hit for <b>Spoof</b>, and your Bias exactly is a zero-day, a hit for either. 0 hits fail and the ICE hits back. 1 strips a layer, but it still hits back. 2 strip a layer clean, and 3 strip two. An attack that hits moves your Bias by one, so the next roll is never the same.</p>
       ${strip(profile.bias, zeroDays)}
+      <p class="note">You roll <b>${dice(1 + profile.levels.breakExpert)}</b> to Break and <b>${dice(1 + profile.levels.spoofExpert)}</b> to Spoof. Expertise adds dice, up to ${N.MAX_DICE}.</p>
       <div><span class="label">When a hit lands, Bias moves</span></div>
       <div class="row">${Object.entries(N.SHIFTS)
         .map(([id, sh]) => `<button class="btn${profile.shift === id ? ' primary' : ''}" type="button" data-shift="${id}" aria-pressed="${profile.shift === id}">${sh.name}</button>`)
@@ -76,11 +77,9 @@ function hexagon(r, cls) {
 
 function glyph(node) {
   switch (node.kind) {
-    case 'ice': {
-      // Under the hexagon: the attack that works on it.
-      const works = node.ice.core ? 'alt' : { spoof: 'break', break: 'spoof' }[N.resists(node.ice)] ?? 'any';
-      return `${hexagon(node.ice.core ? 24 : 18, 'g-ice')}<text class="g-num" y="6" text-anchor="middle">${node.ice.layers}</text><text class="g-tag" y="34" text-anchor="middle">${works}</text>`;
-    }
+    case 'ice':
+      // In the hexagon: layers left. Under it: how hard it hits back.
+      return `${hexagon(node.ice.core ? 24 : 18, 'g-ice')}<text class="g-num" y="6" text-anchor="middle">${node.ice.layers}</text><text class="g-tag" y="34" text-anchor="middle">−${node.ice.counter}</text>`;
     case 'cache':
       return node.visited || node.seen ? '<rect class="g-ink" x="-11" y="-11" width="22" height="22"/><path class="g-ink" d="M-11 0H11"/>' : '';
     case 'trace':
@@ -98,24 +97,28 @@ function glyph(node) {
 
 const HERO = '<polygon class="g-hero" points="-10,-13 13,0 -10,13"/>';
 
+const OUTCOME = {
+  fail: ['bad', 'Fails', 'and it hits back'],
+  scrape: ['ok', '1 hit', 'strips a layer, but it hits back'],
+  clean: ['ok', '2 hits', 'strips a layer clean'],
+  double: ['zero', '3 hits', 'double damage'],
+};
+
 function rollHtml() {
   const r = dive.roll;
-  if (!r) return `<div class="result">${dieHtml(0)}<span class="note">Every outcome is one roll of this die.</span></div>`;
+  if (!r) return `<div class="result"><div class="dice">${dieHtml(0)}</div><span class="note">Every outcome is a roll of the die.</span></div>`;
   let what = '';
+  let faces = dieHtml(r.die);
   if (r.kind === 'cache') what = `<span class="what ok">Cache · ${r.die} × layer</span>`;
   else if (r.kind === 'trace') what = r.ok ? '<span class="what ok">Unseen</span>' : '<span class="what bad">Traced −3</span>';
   else {
-    const verb = N.ATTACKS[r.kind];
-    what =
-      r.outcome === 'zero-day'
-        ? '<span class="what zero">Zero-day</span>'
-        : r.outcome === 'success'
-          ? `<span class="what ok">${verb} lands</span>`
-          : `<span class="what bad">${r.resisted ? `${verb} resisted` : `${verb} fails`}</span>`;
+    // Hits stand out; a zero-day hit is marked as one.
+    faces = r.dice.map((die, i) => dieHtml(die, r.hits[i] ? (r.zeroDays.includes(die) ? 'hit zd' : 'hit') : 'miss')).join('');
+    const [tone, head, tail] = OUTCOME[r.outcome];
+    what = `<span class="what ${tone}">${N.ATTACKS[r.kind]}: ${head}</span><span class="note">${tail}</span>`;
     if (r.biasTo != null && r.biasTo !== r.bias) what += `<span class="note">Bias ${r.bias} → ${r.biasTo}</span>`;
-    if (r.rerolled) what += `<span class="note">Buffer rerolled a ${r.rerolled}.</span>`;
   }
-  return `<div class="result">${dieHtml(r.die)}<div style="display:grid;gap:2px">${what}</div></div>`;
+  return `<div class="result"><div class="dice">${faces}</div><div style="display:grid;gap:2px">${what}</div></div>`;
 }
 
 function panelHtml() {
@@ -126,13 +129,10 @@ function panelHtml() {
   if (m === 'ice') {
     const { ice } = here;
     const pips = Array.from({ length: ice.max }, (_, i) => `<i class="${i < ice.layers ? '' : 'off'}"></i>`).join('');
-    const resisted = N.resists(ice);
-    const cost = Math.max(1, ice.counter - dive.firewall);
-    const zd = N.zeroDays(dive).join(' or ');
     const button = (id, faces) =>
-      `<button class="btn${resisted === id ? '' : ' primary'}" type="button" data-act="${id}">${N.ATTACKS[id]} <small>${resisted === id ? `resisted: only ${zd}` : `lands on ${faces}, ${zd}`}</small></button>`;
+      `<button class="btn attack" type="button" data-act="${id}"><span>${N.ATTACKS[id]} · ${dice(dive.dice[id])}</span><small>a die hits on ${[faces, ...N.zeroDays(dive)].filter((f) => f !== 'never').join(' or ')}</small></button>`;
     head = `<h2>${esc(ice.name)}</h2><div class="layers" aria-label="${ice.layers} of ${ice.max} layers left">${pips}</div>
-      <p class="note">${ice.core ? `Its layers alternate; right now it resists ${N.ATTACKS[resisted]}.` : resisted ? `Resists ${N.ATTACKS[resisted]}: only a zero-day gets through with it.` : 'Resists nothing.'} A failed roll costs ${cost} extra cycle${cost > 1 ? 's' : ''}.</p>`;
+      <p class="note">Hits: 0 fail, 1 strips a layer, both hit back −${ice.counter}. 2 strip a layer clean, 3 strip two.</p>`;
     actions = `<div class="row">${button('break', range(1, dive.bias - 1))}${button('spoof', range(dive.bias + 1, 6))}</div>`;
   } else if (m === 'explore') {
     head = `<h2>${here.kind === 'uplink' ? 'Uplink to the next layer' : 'Node clear'}</h2><p class="note">Tap a node to go there. Moving through nodes you've been to is free; a new node costs a cycle.</p>`;
@@ -181,13 +181,18 @@ async function show(fn) {
   const before = dive.roll?.n ?? 0;
   fn(dive);
   if ((dive.roll?.n ?? 0) !== before) {
-    await spin(document.querySelector('.panel .die'), dive.roll.die, () => S.play('tick'));
+    // Lay out a blank die for each one rolled, then tumble them together.
+    const faces = dive.roll.dice ?? [dive.roll.die];
+    const box = document.querySelector('.panel .result .dice');
+    if (box) box.innerHTML = faces.map(() => dieHtml(0)).join('');
+    const els = [...document.querySelectorAll('.panel .result .die')];
+    await Promise.all(faces.map((face, i) => spin(els[i], face, i ? undefined : () => S.play('tick'))));
     S.play('land');
   }
   render();
   let at = 0;
   for (const e of dive.events) {
-    const name = e.type === 'trace' ? (e.ok ? 'disarm' : 'sprung') : e.type === 'kill' && e.zeroDay ? 'crit' : SOUNDS[e.type];
+    const name = e.type === 'trace' ? (e.ok ? 'disarm' : 'sprung') : e.type === 'hit' && e.double ? 'crit' : SOUNDS[e.type];
     if (name) setTimeout(() => S.play(name), (at += 80));
   }
 }
