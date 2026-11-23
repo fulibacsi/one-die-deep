@@ -17,6 +17,7 @@ work, because browsers block module imports from `file://`.
 
 Keys: arrows move, Space attacks, 1–3 use skills (or pick a stat on level-up),
 F flees, P drinks a potion, D descends, E / L equip or leave loot.
+Click or tap a room you can see to walk there through the rooms you've explored.
 
 ## Rules
 

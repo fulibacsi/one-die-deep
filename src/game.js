@@ -269,6 +269,31 @@ export function canMove(state, k) {
   return mode(state) === 'explore' && k in state.rooms && neighbors(state, state.pos).includes(k);
 }
 
+/**
+ * The shortest walk to a room you can see, as the rooms to step into in turn.
+ * It only passes through rooms you've explored that hold no foe; the last
+ * step may be into anything. Null when there's no such walk.
+ */
+export function route(state, k) {
+  if (mode(state) !== 'explore' || !state.rooms[k]?.seen || k === state.pos) return null;
+  const from = { [state.pos]: null };
+  const queue = [state.pos];
+  while (queue.length) {
+    const at = queue.shift();
+    for (const n of neighbors(state, at)) {
+      if (n in from || !state.rooms[n].seen) continue;
+      from[n] = at;
+      if (n === k) {
+        const steps = [];
+        for (let step = k; step !== state.pos; step = from[step]) steps.unshift(step);
+        return steps;
+      }
+      if (state.rooms[n].visited && !state.rooms[n].enemy) queue.push(n);
+    }
+  }
+  return null;
+}
+
 export function move(state, k) {
   begin(state);
   if (!canMove(state, k)) return state;

@@ -135,7 +135,7 @@ function panelHtml() {
       <p class="note">${ice.core ? `Its layers alternate; right now it resists ${N.ATTACKS[resisted]}.` : resisted ? `Resists ${N.ATTACKS[resisted]}: only a zero-day gets through with it.` : 'Resists nothing.'} A failed roll costs ${cost} extra cycle${cost > 1 ? 's' : ''}.</p>`;
     actions = `<div class="row">${button('break', range(1, dive.bias - 1))}${button('spoof', range(dive.bias + 1, 6))}</div>`;
   } else if (m === 'explore') {
-    head = `<h2>${here.kind === 'uplink' ? 'Uplink to the next layer' : 'Node clear'}</h2><p class="note">Tap a node next to you to move. A new node costs a cycle; nodes you've been to are free.</p>`;
+    head = `<h2>${here.kind === 'uplink' ? 'Uplink to the next layer' : 'Node clear'}</h2><p class="note">Tap a node to go there. Moving through nodes you've been to is free; a new node costs a cycle.</p>`;
     actions = `<div class="row">${here.kind === 'uplink' ? `<button class="btn primary" type="button" data-act="descend">Descend to layer ${dive.layer + 1}</button>` : ''}<button class="btn ghost" type="button" data-act="jackout">Jack out</button></div>`;
   } else {
     const title = { won: 'Core cracked', out: 'Disconnected', jacked: 'Jacked out' }[m];
@@ -147,7 +147,8 @@ function panelHtml() {
 }
 
 function diveHtml() {
-  const reachable = new Set(N.mode(dive) === 'explore' ? neighbors(dive.rooms, dive.pos) : []);
+  const reachable = new Set(Object.keys(dive.rooms).filter((k) => N.route(dive, k)));
+  const next = new Set(neighbors(dive.rooms, dive.pos).filter((k) => reachable.has(k)));
   return `<section class="screen dive">
     <div class="hud box">
       <div><span class="label">Layer</span> <b class="num">${dive.layer}/${N.LAYERS}</b> <span class="note">${N.LAYER_NAMES[dive.layer - 1]}</span></div>
@@ -155,7 +156,7 @@ function diveHtml() {
       <div><span class="label">Data</span> <b class="num">${dive.data}</b></div>
       <div style="min-width:180px">${strip(dive.bias, N.zeroDays(dive))}</div>
     </div>
-    <div class="map">${mapSvg({ rooms: dive.rooms, pos: dive.pos, glyph, hero: HERO, reachable, shape: 'circle', label: `Layer ${dive.layer}` })}</div>
+    <div class="map">${mapSvg({ rooms: dive.rooms, pos: dive.pos, glyph, hero: HERO, reachable, next, shape: 'circle', label: `Layer ${dive.layer}` })}</div>
     ${panelHtml()}
   </section>`;
 }
@@ -170,13 +171,18 @@ const SOUNDS = { move: 'step', encounter: 'encounter', hit: 'hit', kill: 'kill',
 
 async function act(fn) {
   if (busy || !dive) return;
+  busy = true;
+  await show(fn);
+  busy = false;
+}
+
+// Runs one engine action and shows what it did.
+async function show(fn) {
   const before = dive.roll?.n ?? 0;
   fn(dive);
   if ((dive.roll?.n ?? 0) !== before) {
-    busy = true;
     await spin(document.querySelector('.panel .die'), dive.roll.die, () => S.play('tick'));
     S.play('land');
-    busy = false;
   }
   render();
   let at = 0;
@@ -184,6 +190,20 @@ async function act(fn) {
     const name = e.type === 'trace' ? (e.ok ? 'disarm' : 'sprung') : e.type === 'kill' && e.zeroDay ? 'crit' : SOUNDS[e.type];
     if (name) setTimeout(() => S.play(name), (at += 80));
   }
+}
+
+// Walks to a node one move at a time, and stops if a move leads into
+// anything but more exploring.
+async function travel(k) {
+  const steps = dive && N.route(dive, k);
+  if (busy || !steps) return;
+  busy = true;
+  for (const [i, step] of steps.entries()) {
+    if (i) await new Promise((resolve) => setTimeout(resolve, 160));
+    await show((d) => N.move(d, step));
+    if (dive.pos !== step || N.mode(dive) !== 'explore') break;
+  }
+  busy = false;
 }
 
 screen.addEventListener('click', (e) => {
@@ -216,7 +236,7 @@ screen.addEventListener('click', (e) => {
     profile = N.newProfile();
     store.set(SAVE, profile);
     render();
-  } else if (room) act((d) => N.move(d, room));
+  } else if (room) travel(room);
   else if (name === 'break' || name === 'spoof') act((d) => N.attempt(d, name));
   else if (name === 'descend') act(N.descend);
   else if (name === 'jackout') act(N.jackOut);
@@ -226,7 +246,7 @@ screen.addEventListener('keydown', (e) => {
   const room = e.target.closest?.('[data-room]');
   if (room && (e.key === 'Enter' || e.key === ' ')) {
     e.preventDefault();
-    act((d) => N.move(d, room.dataset.room));
+    travel(room.dataset.room);
   }
 });
 
