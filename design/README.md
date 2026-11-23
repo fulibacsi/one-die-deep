@@ -30,12 +30,43 @@ keeping the single d6. The write-up is
 
 | Prototype | Theme, genre, mechanic | Status | Decision and reason |
 | --- | --- | --- | --- |
-| [NETDIVE](prototypes/netdive/) | Hacking; incremental; one stat (Bias) | Active | Explore further. It misses the core of a single moving value: a successful roll should shift your Bias. Ghosting past ICE (skipping) is the wrong action: it should be a second kind of attack, and ICE should resist different attacks. |
+| [NETDIVE](prototypes/netdive/) | Hacking; incremental; one stat (Bias) | Active, see v2 below | Explore further. It misses the core of a single moving value: a successful roll should shift your Bias. Ghosting past ICE (skipping) is the wrong action: it should be a second kind of attack, and ICE should resist different attacks. |
 | [SONAR](prototypes/sonar/) | Deep sea; dungeon minesweeper; level only | Abandoned | Unplayable on a phone, and the direction isn't pursued. On phones the board covered the panel below it; that layout bug is fixed here so the prototype stays playable. |
 | [High Roller](prototypes/high-roller/) | Casino heist; roguelite; the die is the character | Abandoned | A game with the same mechanics was released in November 2026, and acclaimed games with very similar gameplay already exist. |
 
 The write-up recommended High Roller's "die is the character" direction. With
 High Roller abandoned, that recommendation was not taken.
+
+### 2026-11-23: NETDIVE v2
+
+Built from the feedback above:
+
+- **Two attacks.** Break lands on a roll under Bias, Spoof on a roll over it. Both
+  strip ICE layers and earn data. Rolling Bias exactly is a zero-day: the ICE
+  crashes whatever it resists.
+- **Resistant ICE.** Walls resist Spoof, sentries resist Break, Black ICE resists
+  nothing, and the Core's six layers alternate. A resisted attack only gets
+  through on a zero-day. The map shows which attack works on each node.
+- **A moving Bias.** Every hit that isn't a zero-day moves Bias by one, within
+  2 to 5. Which way is a setting on the rig screen:
+  - **Swing:** a success pushes you toward the other attack.
+  - **Momentum:** a success makes the same attack easier.
+
+`node tests/balance/prototypes/netdive.js`, 300 profiles per row. A careful bot
+picks the attack that isn't resisted and has better odds; a random bot doesn't
+think:
+
+| Shift | Bot | Dives to win (median) | Attacks land | Attacks made at Bias 2 or 5 |
+| --- | --- | --- | --- | --- |
+| Swing | careful | 15 | 70% | 29% |
+| Swing | random | 20 | 53% | 30% |
+| Momentum | careful | 14 | 75% | 66% |
+| Momentum | random | 19 | 54% | 48% |
+
+Choosing well saves about 5 dives under either setting, so the choice matters.
+Under momentum the careful bot parks at an extreme for two-thirds of its
+attacks, where Bias can't move further. Under swing Bias stays in play. That
+makes swing the recommendation; the owner picks.
 
 ## Parked ideas
 

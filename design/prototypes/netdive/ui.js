@@ -8,6 +8,7 @@ const screen = document.getElementById('screen');
 const soundBtn = document.getElementById('sound');
 
 let profile = store.get(SAVE, null) ?? N.newProfile();
+profile.shift ??= 'swing'; // profiles saved by the first version had no setting
 let dive = null;
 let busy = false;
 
@@ -17,10 +18,10 @@ const range = (a, b) => (a > b ? 'never' : a === b ? `${a}` : `${a}–${b}`);
 // The single stat, drawn as the six faces of the die.
 function strip(bias, zeroDays) {
   const cells = [1, 2, 3, 4, 5, 6]
-    .map((f) => `<span class="${zeroDays.includes(f) ? 'zd' : f < bias ? 'brk' : 'gh'}">${f}</span>`)
+    .map((f) => `<span class="${zeroDays.includes(f) ? 'zd' : f < bias ? 'brk' : 'spf'}">${f}</span>`)
     .join('');
-  return `<div class="strip" aria-label="Break wins on ${range(1, bias - 1)}, zero-day on ${zeroDays.join(' or ')}, ghost wins on ${range(bias + 1, 6)}">${cells}</div>
-    <div class="legend"><span>Break &lt; ${bias}</span><span>Zero-day ${zeroDays.join('/')}</span><span>Ghost &gt; ${bias}</span></div>`;
+  return `<div class="strip" aria-label="Bias ${bias}: Break wins on ${range(1, bias - 1)}, zero-day on ${zeroDays.join(' or ')}, Spoof wins on ${range(bias + 1, 6)}">${cells}</div>
+    <div class="legend"><span>Break &lt; ${bias}</span><span>Zero-day ${zeroDays.join('/')}</span><span>Spoof &gt; ${bias}</span></div>`;
 }
 
 // ---------- between dives ----------
@@ -50,8 +51,13 @@ function hubHtml() {
       <h2>${profile.won ? 'Core cracked. The network is yours.' : 'Your rig'}</h2>
       ${intro}
       <div><span class="label">Bias</span> <span class="num" style="font-size:22px">${profile.bias}</span></div>
-      <p class="note">One stat. Against ICE, <b>Break</b> wins on a roll under your Bias and earns data. <b>Ghost</b> wins on a roll over it and only gets you past. Rolling your Bias exactly is a zero-day: the ICE crashes and pays out.</p>
+      <p class="note">One stat, two attacks. <b>Break</b> lands on a roll under your Bias, <b>Spoof</b> on a roll over it, and rolling your Bias exactly is a zero-day that crashes any ICE. Walls resist Spoof, sentries resist Break. Every hit moves your Bias by one, so the next roll is never the same.</p>
       ${strip(profile.bias, zeroDays)}
+      <div><span class="label">When a hit lands, Bias moves</span></div>
+      <div class="row">${Object.entries(N.SHIFTS)
+        .map(([id, sh]) => `<button class="btn${profile.shift === id ? ' primary' : ''}" type="button" data-shift="${id}" aria-pressed="${profile.shift === id}">${sh.name}</button>`)
+        .join('')}</div>
+      <p class="note">${N.SHIFTS[profile.shift].text}</p>
       ${biasCtl}
       <div class="row"><button class="btn primary" type="button" data-act="dive">Dive · ${N.maxCycles(profile)} cycles from layer ${N.startLayer(profile)}</button></div>
       <div><span class="label">Data</span> <span class="num" style="font-size:22px">${profile.data}</span></div>
@@ -70,10 +76,11 @@ function hexagon(r, cls) {
 
 function glyph(node) {
   switch (node.kind) {
-    case 'ice':
-      return `${hexagon(node.ice.core ? 24 : 18, 'g-ice')}<text class="g-num" y="6" text-anchor="middle">${node.ice.layers}</text>`;
-    case 'ghosted':
-      return hexagon(18, 'g-ice-off');
+    case 'ice': {
+      // Under the hexagon: the attack that works on it.
+      const works = node.ice.core ? 'alt' : { spoof: 'break', break: 'spoof' }[N.resists(node.ice)] ?? 'any';
+      return `${hexagon(node.ice.core ? 24 : 18, 'g-ice')}<text class="g-num" y="6" text-anchor="middle">${node.ice.layers}</text><text class="g-tag" y="34" text-anchor="middle">${works}</text>`;
+    }
     case 'cache':
       return node.visited || node.seen ? '<rect class="g-ink" x="-11" y="-11" width="22" height="22"/><path class="g-ink" d="M-11 0H11"/>' : '';
     case 'trace':
@@ -98,13 +105,14 @@ function rollHtml() {
   if (r.kind === 'cache') what = `<span class="what ok">Cache · ${r.die} × layer</span>`;
   else if (r.kind === 'trace') what = r.ok ? '<span class="what ok">Unseen</span>' : '<span class="what bad">Traced −3</span>';
   else {
-    const verb = r.kind === 'break' ? 'Break' : 'Ghost';
+    const verb = N.ATTACKS[r.kind];
     what =
       r.outcome === 'zero-day'
         ? '<span class="what zero">Zero-day</span>'
         : r.outcome === 'success'
-          ? `<span class="what ok">${verb} works</span>`
-          : `<span class="what bad">${verb} fails</span>`;
+          ? `<span class="what ok">${verb} lands</span>`
+          : `<span class="what bad">${r.resisted ? `${verb} resisted` : `${verb} fails`}</span>`;
+    if (r.biasTo != null && r.biasTo !== r.bias) what += `<span class="note">Bias ${r.bias} → ${r.biasTo}</span>`;
     if (r.rerolled) what += `<span class="note">Buffer rerolled a ${r.rerolled}.</span>`;
   }
   return `<div class="result">${dieHtml(r.die)}<div style="display:grid;gap:2px">${what}</div></div>`;
@@ -118,12 +126,14 @@ function panelHtml() {
   if (m === 'ice') {
     const { ice } = here;
     const pips = Array.from({ length: ice.max }, (_, i) => `<i class="${i < ice.layers ? '' : 'off'}"></i>`).join('');
+    const resisted = N.resists(ice);
+    const cost = Math.max(1, ice.counter - dive.firewall);
+    const zd = N.zeroDays(dive).join(' or ');
+    const button = (id, faces) =>
+      `<button class="btn${resisted === id ? '' : ' primary'}" type="button" data-act="${id}">${N.ATTACKS[id]} <small>${resisted === id ? `resisted: only ${zd}` : `lands on ${faces}, ${zd}`}</small></button>`;
     head = `<h2>${esc(ice.name)}</h2><div class="layers" aria-label="${ice.layers} of ${ice.max} layers left">${pips}</div>
-      <p class="note">${ice.core ? 'Break all six layers to win.' : 'Break pays data when it crashes; Ghost only gets you past.'} A failed roll costs ${Math.max(1, ice.counter - dive.firewall)} extra cycle${ice.counter - dive.firewall > 1 ? 's' : ''}.</p>`;
-    actions = `<div class="row">
-      <button class="btn primary" type="button" data-act="break">Break <small>wins on ${range(1, dive.bias - 1)}</small></button>
-      <button class="btn" type="button" data-act="ghost" ${ice.core ? 'disabled' : ''}>Ghost <small>wins on ${range(dive.bias + 1, 6)}</small></button>
-    </div>`;
+      <p class="note">${ice.core ? `Its layers alternate; right now it resists ${N.ATTACKS[resisted]}.` : resisted ? `Resists ${N.ATTACKS[resisted]}: only a zero-day gets through with it.` : 'Resists nothing.'} A failed roll costs ${cost} extra cycle${cost > 1 ? 's' : ''}.</p>`;
+    actions = `<div class="row">${button('break', range(1, dive.bias - 1))}${button('spoof', range(dive.bias + 1, 6))}</div>`;
   } else if (m === 'explore') {
     head = `<h2>${here.kind === 'uplink' ? 'Uplink to the next layer' : 'Node clear'}</h2><p class="note">Tap a node next to you to move. Each move costs a cycle.</p>`;
     actions = `<div class="row">${here.kind === 'uplink' ? `<button class="btn primary" type="button" data-act="descend">Descend to layer ${dive.layer + 1}</button>` : ''}<button class="btn ghost" type="button" data-act="jackout">Jack out</button></div>`;
@@ -143,7 +153,7 @@ function diveHtml() {
       <div><span class="label">Layer</span> <b class="num">${dive.layer}/${N.LAYERS}</b> <span class="note">${N.LAYER_NAMES[dive.layer - 1]}</span></div>
       <div class="grow"><span class="label">Cycles ${dive.cycles}/${dive.max}</span><div class="bar"><b style="width:${(100 * dive.cycles) / dive.max}%"></b></div></div>
       <div><span class="label">Data</span> <b class="num">${dive.data}</b></div>
-      <div style="min-width:180px">${strip(dive.bias, dive.zeroDays)}</div>
+      <div style="min-width:180px">${strip(dive.bias, N.zeroDays(dive))}</div>
     </div>
     <div class="map">${mapSvg({ rooms: dive.rooms, pos: dive.pos, glyph, hero: HERO, reachable, shape: 'circle', label: `Layer ${dive.layer}` })}</div>
     ${panelHtml()}
@@ -156,7 +166,7 @@ function render() {
 
 // ---------- input ----------
 
-const SOUNDS = { move: 'step', encounter: 'encounter', hit: 'hit', kill: 'kill', ghost: 'escape', hurt: 'hurt', trace: null, backdoor: 'heal', descend: 'descend', data: 'chest', disconnected: 'hurt', won: 'crit', jackout: 'escape' };
+const SOUNDS = { move: 'step', encounter: 'encounter', hit: 'hit', kill: 'kill', shift: 'skill', hurt: 'hurt', trace: null, backdoor: 'heal', descend: 'descend', data: 'chest', disconnected: 'hurt', won: 'crit', jackout: 'escape' };
 
 async function act(fn) {
   if (busy || !dive) return;
@@ -177,13 +187,17 @@ async function act(fn) {
 }
 
 screen.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-act],[data-room],[data-buy],[data-bias]');
+  const el = e.target.closest('[data-act],[data-room],[data-buy],[data-bias],[data-shift]');
   if (!el) return;
-  const { act: name, room, buy, bias } = el.dataset;
+  const { act: name, room, buy, bias, shift } = el.dataset;
   if (buy) {
     N.buy(profile, buy);
     store.set(SAVE, profile);
     S.play('equip');
+    render();
+  } else if (shift) {
+    N.setShift(profile, shift);
+    store.set(SAVE, profile);
     render();
   } else if (bias) {
     N.setBias(profile, Number(bias));
@@ -203,7 +217,7 @@ screen.addEventListener('click', (e) => {
     store.set(SAVE, profile);
     render();
   } else if (room) act((d) => N.move(d, room));
-  else if (name === 'break' || name === 'ghost') act((d) => N.attempt(d, name));
+  else if (name === 'break' || name === 'spoof') act((d) => N.attempt(d, name));
   else if (name === 'descend') act(N.descend);
   else if (name === 'jackout') act(N.jackOut);
 });
