@@ -11,8 +11,10 @@
 // (a success makes the same attack easier). Each dive starts from your
 // starting Bias again.
 //
-// A dive lasts until your cycles run out; every move and roll costs one.
-// You always keep the data, and spend it between dives on upgrades.
+// A dive lasts until your cycles run out. Every roll costs one, and so does
+// every move into a node you haven't been to: going back through explored
+// nodes is free. You always keep the data, and spend it between dives on
+// upgrades.
 import { d6, makeFloor, neighbors, reveal } from '../shared/dice.js';
 
 export const LAYERS = 6;
@@ -186,6 +188,7 @@ export function canMove(dive, k) {
 export function move(dive, k) {
   dive.events = [];
   if (!canMove(dive, k)) return dive;
+  const explored = dive.rooms[k].visited;
   dive.prev = dive.pos;
   dive.pos = k;
   reveal(dive.rooms, k);
@@ -219,7 +222,7 @@ export function move(dive, k) {
     say(dive, `A backdoor: +${dive.cycles - before} cycles.`);
     emit(dive, 'backdoor');
   }
-  spend(dive, 1);
+  if (!explored) spend(dive, 1);
   return dive;
 }
 

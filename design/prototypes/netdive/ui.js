@@ -45,7 +45,7 @@ function hubHtml() {
     .join('');
   const intro = profile.dives
     ? `<p class="note">${profile.dives} dive${profile.dives > 1 ? 's' : ''}, ${profile.earned} data earned, deepest layer ${profile.deepest} of ${N.LAYERS}.</p>`
-    : `<p class="note">Crack the Core on layer ${N.LAYERS}. Each dive lasts until your cycles run out; every move and roll costs one. You keep every bit of data you pull out, and spend it here on your rig.</p>`;
+    : `<p class="note">Crack the Core on layer ${N.LAYERS}. Each dive lasts until your cycles run out: every roll costs one, and so does every move into a node you haven't been to. You keep every bit of data you pull out, and spend it here on your rig.</p>`;
   return `<section class="screen hub">
     <div class="box" style="display:grid;gap:12px;align-content:start">
       <h2>${profile.won ? 'Core cracked. The network is yours.' : 'Your rig'}</h2>
@@ -135,7 +135,7 @@ function panelHtml() {
       <p class="note">${ice.core ? `Its layers alternate; right now it resists ${N.ATTACKS[resisted]}.` : resisted ? `Resists ${N.ATTACKS[resisted]}: only a zero-day gets through with it.` : 'Resists nothing.'} A failed roll costs ${cost} extra cycle${cost > 1 ? 's' : ''}.</p>`;
     actions = `<div class="row">${button('break', range(1, dive.bias - 1))}${button('spoof', range(dive.bias + 1, 6))}</div>`;
   } else if (m === 'explore') {
-    head = `<h2>${here.kind === 'uplink' ? 'Uplink to the next layer' : 'Node clear'}</h2><p class="note">Tap a node next to you to move. Each move costs a cycle.</p>`;
+    head = `<h2>${here.kind === 'uplink' ? 'Uplink to the next layer' : 'Node clear'}</h2><p class="note">Tap a node next to you to move. A new node costs a cycle; nodes you've been to are free.</p>`;
     actions = `<div class="row">${here.kind === 'uplink' ? `<button class="btn primary" type="button" data-act="descend">Descend to layer ${dive.layer + 1}</button>` : ''}<button class="btn ghost" type="button" data-act="jackout">Jack out</button></div>`;
   } else {
     const title = { won: 'Core cracked', out: 'Disconnected', jacked: 'Jacked out' }[m];
