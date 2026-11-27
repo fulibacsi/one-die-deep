@@ -62,12 +62,13 @@ function hubHtml() {
     ? `<p class="note"><b>Last campaign:</b> ${last.taken.length ? `took ${plural(last.taken.length, 'system')}` : 'took no systems'}. Your empire shipped home ${amounts(last.got)}.${last.unrest ? ` Your enslaved worlds added ${last.unrest} unrest.` : ''}</p>${last.revolt ? `<p class="note bad"><b>Revolt!</b> The enslaved ${esc(last.revolt)} rose up. Their world is hostile again, and rebels can only be purged.</p>` : ''}`
     : '';
   const slaves = N.enslaved(p).length;
+  const full = !slaves && p.unrest >= N.UNREST_MAX;
   return `<section class="screen hub">
     <div class="box" style="display:grid;gap:12px;align-content:start">
       <h2>${p.won ? 'The galaxy is yours.' : 'Your empire'}</h2>
       ${intro}${shipped}
       <div><span class="label">Stockpile, and income per campaign</span>${resources(p.stock, Object.fromEntries(Object.entries(rate).map(([r, n]) => [r, `+${n}`])))}</div>
-      <div class="hud-like">${unrestBar(p)}<span class="note">${slaves ? `+${slaves * N.UNREST.perWorld} per campaign from ${plural(slaves, 'enslaved world')}` : 'No enslaved worlds'}</span></div>
+      <div class="hud-like">${unrestBar(p)}<span class="note">${slaves ? `+${slaves * N.UNREST.perWorld} per campaign from ${plural(slaves, 'enslaved world')}` : 'No enslaved worlds'}${full ? '. Unrest only falls when a world revolts, so the next world you enslave will revolt at once.' : ''}</span></div>
       <div class="map">${starmapSvg({ rooms: p.rooms, pos: p.home, label: 'Your galaxy' })}</div>
       <div class="row"><button class="btn primary" type="button" data-act="launch">Launch a campaign · ${N.maxSupply(p)} supply</button></div>
       <button class="btn ghost" type="button" data-act="wipe" style="justify-self:start">New galaxy</button>
@@ -119,7 +120,7 @@ function panelHtml() {
     const f = N.fates(here);
     const fate = core
       ? 'Take the throneworld and the galaxy is yours.'
-      : `<b>The final blow decides their fate.</b> Purge: ${amounts(f.purge)}, enslave: ${amounts(f.enslave)}, per campaign.`;
+      : `<b>The final blow decides their fate.</b> Purge: ${amounts(f.purge)}, enslave: ${amounts(f.enslave)}, per campaign.${profile.unrest >= N.UNREST_MAX ? ' Unrest is full: enslaved now, they would revolt at once.' : ''}`;
     // Your Aggression counts for either action, so each hits on one run of faces.
     const button = (id, faces) =>
       N.allowed(c, id)
