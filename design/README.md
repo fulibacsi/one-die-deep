@@ -238,6 +238,18 @@ What it shows:
   just one quick fight. Rebels rising 2 stronger and striking back 1 harder gave
   unrest its bite.
 
+### 2026-11-27: STARHOLD star systems
+
+The owner asked for star systems instead of round rooms, seen from above, with
+the player orbiting them, never static. Each system is now a star with one or
+two planets on orbits that keep turning. The resource planet is coloured by
+what the world yields: alloys or fuel. Your fleet circles the system it's at.
+Held systems are shaded as territory, and badges show strength, fate and yield.
+The map redraws after every action, so each orbit is drawn at its phase at that
+moment and planets carry on instead of jumping back. With reduced motion
+everything stands still. STARHOLD draws this with its own renderer,
+`prototypes/starhold/starmap.js`; the other prototypes keep the shared map view.
+
 ## Parked ideas
 
 - **Class passives** for every class, perhaps unlocked at the first level-up. They

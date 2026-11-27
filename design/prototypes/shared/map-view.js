@@ -9,9 +9,9 @@ const ROOM = 64;
  * rooms: { k: { x, y, seen, visited } }, pos: current key,
  * glyph(room, k) -> SVG drawn around 0,0, hero: SVG around 0,0,
  * reachable: Set of keys you can move to, next: those of them one step away,
- * shape: 'square' | 'circle', classOf(room, k) -> extra classes for a room.
+ * shape: 'square' | 'circle'.
  */
-export function mapSvg({ rooms, pos, glyph, hero, reachable = new Set(), next = new Set(), shape = 'square', label = 'Map', classOf = () => '' }) {
+export function mapSvg({ rooms, pos, glyph, hero, reachable = new Set(), next = new Set(), shape = 'square', label = 'Map' }) {
   let doors = '';
   let cells = '';
   for (const [k, room] of Object.entries(rooms)) {
@@ -24,8 +24,7 @@ export function mapSvg({ rooms, pos, glyph, hero, reachable = new Set(), next = 
       const known = room.visited && n.visited;
       doors += `<line class="door${known ? '' : ' unknown'}" x1="${cx + (dx * ROOM) / 2}" y1="${cy + (dy * ROOM) / 2}" x2="${cx + dx * (CELL - ROOM / 2)}" y2="${cy + dy * (CELL - ROOM / 2)}"/>`;
     }
-    const extra = classOf(room, k);
-    const cls = `room${room.visited ? '' : ' unknown'}${k === pos ? ' here' : ''}${extra ? ` ${extra}` : ''}`;
+    const cls = `room${room.visited ? '' : ' unknown'}${k === pos ? ' here' : ''}`;
     const body =
       shape === 'circle'
         ? `<circle class="${cls}" cx="${cx}" cy="${cy}" r="${ROOM / 2}"/>`
