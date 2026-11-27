@@ -32,6 +32,7 @@ keeping the single d6. The write-up is
 | --- | --- | --- | --- |
 | [NETDIVE](prototypes/netdive/) | Hacking; incremental; one stat (Bias) | Active, see v2 and v3 below | Explore further. It misses the core of a single moving value: a successful roll should shift your Bias. Ghosting past ICE (skipping) is the wrong action: it should be a second kind of attack, and ICE should resist different attacks. |
 | [SONAR](prototypes/sonar/) | Deep sea; dungeon minesweeper; level only | Abandoned | Unplayable on a phone, and the direction isn't pursued. On phones the board covered the panel below it; that layout bug is fixed here so the prototype stays playable. |
+| [STARHOLD](prototypes/starhold/) | Galaxy conquest; incremental with resources; one stat (Aggression) | New, see below | A variant of NETDIVE to try out, on the owner's idea. |
 | [High Roller](prototypes/high-roller/) | Casino heist; roguelite; the die is the character | Abandoned | A game with the same mechanics was released in November 2026, and acclaimed games with very similar gameplay already exist. |
 
 The write-up recommended High Roller's "die is the character" direction. With
@@ -140,6 +141,62 @@ What it shows:
   attacks and gets 3 hits 58% of the time.
 
 Still open: making the choice of attack a real one on each roll.
+
+### 2026-11-27: STARHOLD, galaxy conquest
+
+The owner's idea: move the theme to conquering a galaxy. Nodes become star
+systems, occupied by species you can kill or enslave, and each system you take
+generates resources. It's a new variant next to NETDIVE, still incremental, and
+maybe a resource management game too. Built on NETDIVE v3's roll:
+
+- **One galaxy that stays.** 20 systems on a 6×6 chart, kept between campaigns.
+  Systems you take stay yours. Defenders you don't finish regroup between
+  campaigns, so a system has to fall within one campaign.
+- **A campaign** launches from your homeworld with 6 supply, +4 per level of
+  Supply lines. Flying through your own systems is free; any other system costs
+  1 supply, and so does every roll. Uninhabited worlds are yours on arrival, and
+  derelicts also give +3 supply.
+- **Two actions, Purge (kill) and Enslave,** rolled as in NETDIVE v3, with
+  Aggression as the one stat: a die under it hits for Purge, a die over it hits
+  for Enslave, and a die equal to it hits for either. Same ladder: 0 hits fail and
+  the defenders strike back, 1 hit takes 1 strength but they strike back, 2 take 1
+  clean, 3 take 2. A hit moves Aggression toward the other action. This is
+  NETDIVE's swing; momentum broke in v3, so it isn't offered.
+- **The final blow decides the fate.** A purged world yields its planet's
+  resource, alloys or fuel. An enslaved world yields labor. Strength, strike-back
+  and yields grow with distance from home.
+- **Income.** After every campaign, each system you hold ships its output home.
+  Upgrades are each bought with one resource: Warfleet (+1 Purge die, alloys),
+  Overseers (+1 Enslave die, labor), Supply lines (+4 supply, fuel) and War
+  doctrine (choose your starting Aggression, labor).
+- Take the Precursor throneworld at the far end, strength 12, to win.
+
+`node tests/balance/prototypes/starhold.js`, 300 profiles per row. The careful
+bot picks by odds, but on the final blow it picks the fate that yields the
+resource it needs next. The odds bot ignores fate, and the random bot picks at
+random:
+
+| Bot | Campaigns to win (median, p10–p90) | Hits 0 / 1 / 2 / 3 | Systems claimed / purged / enslaved |
+| --- | --- | --- | --- |
+| Careful | 14 (12–18) | 14% / 40% / 35% / 11% | 25% / 31% / 44% |
+| Odds | 14 (12–19) | 12% / 38% / 39% / 11% | 25% / 31% / 44% |
+| Random | 17 (13–25) | 17% / 37% / 32% / 14% | 20% / 38% / 42% |
+
+What it shows:
+
+- **Pacing is close to NETDIVE's.** The first tuning won in 5 campaigns, because
+  damage to a garrison carried over between campaigns. Regrouping, lower yields
+  and dearer upgrades brought it to 14.
+- **Choosing fates by need doesn't pay off yet.** The bot that ignores fate also
+  needs a median of 14 campaigns. On the final blow, odds and need disagree about
+  16 times per profile, so the choice does come up, but the three resources stay
+  roughly balanced however you choose. Making fuel scarcer, on a third of planets
+  instead of half, didn't change that (15 campaigns against 15).
+- **Picking by odds still matters:** random takes 17.
+
+Still open: making a species' fate matter. Ideas to discuss: enslaved worlds risk
+revolt, which is where the heat meter from the NETDIVE discussion would fit;
+costs that need a mix of resources; or upkeep.
 
 ## Parked ideas
 
