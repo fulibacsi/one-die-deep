@@ -198,6 +198,46 @@ Still open: making a species' fate matter. Ideas to discuss: enslaved worlds ris
 revolt, which is where the heat meter from the NETDIVE discussion would fit;
 costs that need a mix of resources; or upkeep.
 
+### 2026-11-27: STARHOLD revolts, a heat meter
+
+The owner asked for enslaved worlds that revolt, with a heat meter like the one
+discussed for NETDIVE: enslaving risks a revolt, and then you have to purge.
+
+- **Unrest** is the heat meter, 0 to 10, kept between campaigns.
+- **Enslaving is the quiet action.** When a purge goes badly (0 or 1 hits) the
+  defenders strike back and cost supply, as before. When an enslavement goes
+  badly they don't, but unrest rises: +2 on 0 hits, +1 on 1 hit.
+- **Each enslaved world adds 1 unrest** at the end of every campaign.
+- **At 10, the largest enslaved world revolts.** It turns hostile at full
+  strength, 2 stronger and striking back 1 harder than before, and unrest resets
+  to 0. Rebels can only be purged; crushed, the world is yours again as a purged
+  world. A revolt can cut your territory in two, because you can only fly freely
+  through systems you hold.
+
+`node tests/balance/prototypes/starhold.js`, 300 profiles per row. The careful
+bot now weighs a point of unrest like a point of supply (three times as much
+when a revolt is near) and won't enslave on a final blow that could set one off.
+The odds bot ignores costs and fate:
+
+| Bot | Won | Campaigns to win (median, p10–p90) | Enslaved systems | Revolts per galaxy | Rolls against rebels |
+| --- | --- | --- | --- | --- | --- |
+| Careful | 100% | 16 (12–24) | 20% | 3.0 | 22% |
+| Odds | 96% | 19 (13–40) | 35% | 5.1 | 57% |
+| Random | 96% | 19 (13–36) | 34% | 5.7 | 28% |
+
+Bots that miss within 150 campaigns count as not winning.
+
+What it shows:
+
+- **Fate and cost now matter.** Before revolts, ignoring them cost nothing (14
+  campaigns either way). Now the bots that ignore them take 3 campaigns longer,
+  and 4% of their galaxies stall in a cycle of revolts.
+- **The careful bot enslaves less:** a fifth of its systems, against a third.
+- **Tuning:** without stronger rebels, revolts made the game easier, not harder
+  (careful 13, random 14). A failed enslavement costs no supply, and a revolt was
+  just one quick fight. Rebels rising 2 stronger and striking back 1 harder gave
+  unrest its bite.
+
 ## Parked ideas
 
 - **Class passives** for every class, perhaps unlocked at the first level-up. They

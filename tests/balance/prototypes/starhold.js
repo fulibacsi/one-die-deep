@@ -1,11 +1,14 @@
 // STARHOLD: campaigns to take the Precursor throneworld, for three players.
-// The careful bot picks the action that takes the most strength per supply it
-// expects to spend, except on the final blow, where it picks the fate that
-// yields the resource it needs next, if those odds are at least 60% as good.
-// The odds bot always picks by odds, ignoring fate; the random bot picks at
-// random. Careful against odds shows whether choosing fates pays off. Also:
-// how battles turn out by number of hits, how often the final blow trades odds
-// for the resource, and the fates chosen.
+// The careful bot picks the action that takes the most strength for what it
+// expects to lose: supply when a purge goes badly, unrest when an enslavement
+// does (a point of unrest counted as a point of supply, more when a revolt is
+// near). On the final blow it picks the fate that yields the resource it needs
+// next, if those odds are at least 60% as good, and it doesn't enslave when
+// that could set off a revolt. The odds bot picks whichever action takes more
+// strength, ignoring costs and fate; the random bot picks at random. Rebels can
+// only be purged. Careful against odds shows whether weighing costs and fates
+// pays off. Also: how battles turn out by number of hits, how often each bot's
+// choice differs from the odds bot's, the fates chosen, and revolts.
 // Usage: node tests/balance/prototypes/starhold.js [profiles, default 300]
 import * as N from '../../../design/prototypes/starhold/engine.js';
 
@@ -24,10 +27,21 @@ function atLeast(c, action) {
   return [1, 2, 3].map((k) => [1, 2, 3].filter((j) => j >= k).reduce((sum, j) => sum + exactly(j), 0));
 }
 
-function worth(c, action, species) {
-  const [one, two, three] = atLeast(c, action);
-  return (one + three) / (1 + (1 - two) * species.strike);
+// Expected strength taken by one roll.
+function taken(c, action) {
+  const [one, , three] = atLeast(c, action);
+  return one + three;
 }
+
+// Strength taken per supply-equivalent the roll is expected to cost.
+function worth(c, action, species) {
+  const [one, two] = atLeast(c, action);
+  if (action === 'purge') return taken(c, action) / (1 + (1 - two) * species.strike);
+  const unrest = 2 * (1 - one) + (one - two); // +2 on 0 hits, +1 on 1 hit
+  const weight = c.p.unrest >= N.UNREST_MAX - 3 ? 3 : 1;
+  return taken(c, action) / (1 + unrest * weight);
+}
+const byTaken = (c) => (taken(c, 'purge') >= taken(c, 'enslave') ? 'purge' : 'enslave');
 
 // The resource of the upgrade closest to affordable.
 function needed(p) {
@@ -42,21 +56,30 @@ function needed(p) {
 
 const POLICIES = {
   careful(c, sys, stats) {
-    const byOdds = worth(c, 'purge', sys.species) >= worth(c, 'enslave', sys.species) ? 'purge' : 'enslave';
-    if (sys.species.strength > 1 || sys.kind === 'core') return byOdds;
+    const byCost = worth(c, 'purge', sys.species) >= worth(c, 'enslave', sys.species) ? 'purge' : 'enslave';
+    if (sys.species.strength > 1 || sys.kind === 'core') return byCost;
     const want = needed(c.p);
-    const fate = want === 'labor' ? 'enslave' : want === sys.planet ? 'purge' : null;
-    if (!fate || fate === byOdds) return byOdds;
+    const risky = c.p.unrest + c.p.levels.overseers >= N.UNREST_MAX - 2; // an enslaved world could tip it over
+    const fate = want === 'labor' && !risky ? 'enslave' : want === sys.planet ? 'purge' : risky ? 'purge' : null;
+    if (!fate || fate === byCost) return byCost;
     stats.tradeoffs += 1;
-    if (atLeast(c, fate)[0] >= 0.6 * atLeast(c, byOdds)[0]) {
+    if (atLeast(c, fate)[0] >= 0.6 * atLeast(c, byCost)[0]) {
       stats.overrides += 1;
       return fate;
     }
-    return byOdds;
+    return byCost;
   },
-  odds: (c, sys) => (worth(c, 'purge', sys.species) >= worth(c, 'enslave', sys.species) ? 'purge' : 'enslave'),
+  odds: (c) => byTaken(c),
   random: () => (Math.random() < 0.5 ? 'purge' : 'enslave'),
 };
+
+// Picks with the policy, purging rebels whatever it says.
+function pick(policy, c, sys, stats) {
+  const choice = POLICIES[policy](c, sys, stats);
+  if (N.allowed(c, choice)) return choice;
+  stats.rebelRolls += 1;
+  return 'purge';
+}
 
 // The nearest system you don't hold, by flight.
 function target(c) {
@@ -74,7 +97,9 @@ function campaign(p, policy, stats) {
   for (let i = 0; i < 500 && !c.over; i++) {
     if (N.mode(c) === 'battle') {
       const sys = c.rooms[c.engaged];
-      N.attempt(c, POLICIES[policy](c, sys, stats));
+      const action = pick(policy, c, sys, stats);
+      if (action !== byTaken(c)) stats.differs += 1;
+      N.attempt(c, action);
       stats.attacks += 1;
       stats[c.roll.outcome] += 1;
       continue;
@@ -96,7 +121,7 @@ function campaign(p, policy, stats) {
 
 function run(policy) {
   const results = [];
-  const stats = { attacks: 0, fail: 0, scrape: 0, clean: 0, double: 0, tradeoffs: 0, overrides: 0, claimed: 0, purged: 0, enslaved: 0, earned: { alloys: 0, fuel: 0, labor: 0 }, half: [] };
+  const stats = { attacks: 0, fail: 0, scrape: 0, clean: 0, double: 0, differs: 0, rebelRolls: 0, tradeoffs: 0, overrides: 0, claimed: 0, purged: 0, enslaved: 0, revolts: 0, earned: { alloys: 0, fuel: 0, labor: 0 } };
   for (let s = 1; s <= profiles; s++) {
     const p = N.newProfile(s * 7919);
     while (!p.won && p.campaigns < CAP) {
@@ -109,6 +134,7 @@ function run(policy) {
       N.settle(p, campaign(p, policy, stats));
     }
     for (const r of Object.keys(stats.earned)) stats.earned[r] += p.earned[r];
+    stats.revolts += p.revolts;
     results.push(p.won ? p.campaigns : Infinity);
   }
   results.sort((a, b) => a - b);
@@ -119,7 +145,8 @@ function run(policy) {
   const earned = Object.entries(stats.earned).map(([r, n]) => `${r} ${Math.round(n / profiles)}`).join(', ');
   return [
     `${policy.padEnd(8)} won ${pct(results.filter(Number.isFinite).length, profiles).padStart(4)}  campaigns p10/median/p90 ${q(0.1)}/${q(0.5)}/${q(0.9)}  hits 0/1/2/3 ${pct(stats.fail, a)}/${pct(stats.scrape, a)}/${pct(stats.clean, a)}/${pct(stats.double, a)}`,
-    `${''.padEnd(8)} systems taken: claimed ${pct(stats.claimed, taken)}, purged ${pct(stats.purged, taken)}, enslaved ${pct(stats.enslaved, taken)}  earned per profile: ${earned}` +
+    `${''.padEnd(8)} systems taken: claimed ${pct(stats.claimed, taken)}, purged ${pct(stats.purged, taken)}, enslaved ${pct(stats.enslaved, taken)}  earned per profile: ${earned}`,
+    `${''.padEnd(8)} revolts per profile ${(stats.revolts / profiles).toFixed(1)}  rolls against rebels ${pct(stats.rebelRolls, a)}  rolls that differ from the odds bot's pick ${pct(stats.differs, a)}` +
       (policy === 'careful' ? `\n${''.padEnd(8)} final blows where odds and need disagree: ${stats.tradeoffs}, of them need won ${pct(stats.overrides, stats.tradeoffs)}` : ''),
   ].join('\n');
 }

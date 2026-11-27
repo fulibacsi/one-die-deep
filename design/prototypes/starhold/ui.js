@@ -3,7 +3,7 @@ import { dieHtml, spin, store } from '../shared/dice.js';
 import { mapSvg, neighbors } from '../shared/map-view.js';
 import * as S from '../../../src/sound.js';
 
-const SAVE = 'starhold:v1';
+const SAVE = 'starhold:v2'; // v2 adds unrest; v1 saves don't carry over
 const screen = document.getElementById('screen');
 const soundBtn = document.getElementById('sound');
 
@@ -23,6 +23,10 @@ function resources(values, notes = {}) {
   return `<div class="res">${Object.entries(N.RESOURCES)
     .map(([r, name]) => `<span class="${r}"><i></i>${name} <b>${values[r]}</b>${notes[r] ? ` <small>${notes[r]}</small>` : ''}</span>`)
     .join('')}</div>`;
+}
+
+function unrestBar(p) {
+  return `<div class="grow"><span class="label">Unrest ${p.unrest}/${N.UNREST_MAX}</span><div class="bar unrest"><b style="width:${(100 * p.unrest) / N.UNREST_MAX}%"></b></div></div>`;
 }
 
 // Aggression on the die's faces.
@@ -52,7 +56,7 @@ function glyph(sys) {
   if (sys.species) {
     const core = sys.kind === 'core';
     // In the triangle: strength. Under it: the planet's resource, and how hard they strike back.
-    return `${triangle(core ? 26 : 19, 'g-foe')}<text class="g-num" y="${core ? 9 : 8}" text-anchor="middle">${sys.species.strength}</text><text class="g-tag" y="38" text-anchor="middle">${core ? '' : `${LETTER[sys.planet]} `}−${sys.species.strike}</text>`;
+    return `${triangle(core ? 26 : 19, sys.species.rebel ? 'g-rebel' : 'g-foe')}<text class="g-num" y="${core ? 9 : 8}" text-anchor="middle">${sys.species.strength}</text><text class="g-tag" y="38" text-anchor="middle">${core ? '' : `${LETTER[sys.planet]} `}−${sys.species.strike}</text>`;
   }
   const ring = `<circle class="g-ring g-${sys.planet}" r="12"/><text class="g-tag" y="6" text-anchor="middle">${LETTER[sys.planet]}</text>`;
   if (sys.kind === 'derelict') return `${ring}<path class="g-ink" d="M-20 -20L-12 -12M14 -18L20 -12M-18 16L-12 12"/>`;
@@ -86,13 +90,15 @@ function hubHtml() {
     ? `<p class="note">${plural(p.campaigns, 'campaign')}. You hold ${N.held(p)} of ${N.SYSTEMS} systems.</p>`
     : '<p class="note">Take the Precursor throneworld at the far end of the galaxy. A campaign lasts until your supply runs out or you recall the fleet. Systems you take stay yours, and after every campaign each one ships its output home.</p>';
   const shipped = last
-    ? `<p class="note"><b>Last campaign:</b> ${last.taken.length ? `took ${plural(last.taken.length, 'system')}` : 'took no systems'}. Your empire shipped home ${amounts(last.got)}.</p>`
+    ? `<p class="note"><b>Last campaign:</b> ${last.taken.length ? `took ${plural(last.taken.length, 'system')}` : 'took no systems'}. Your empire shipped home ${amounts(last.got)}.${last.unrest ? ` Your enslaved worlds added ${last.unrest} unrest.` : ''}</p>${last.revolt ? `<p class="note bad"><b>Revolt!</b> The enslaved ${esc(last.revolt)} rose up. Their world is hostile again, and rebels can only be purged.</p>` : ''}`
     : '';
+  const slaves = N.enslaved(p).length;
   return `<section class="screen hub">
     <div class="box" style="display:grid;gap:12px;align-content:start">
       <h2>${p.won ? 'The galaxy is yours.' : 'Your empire'}</h2>
       ${intro}${shipped}
       <div><span class="label">Stockpile, and income per campaign</span>${resources(p.stock, Object.fromEntries(Object.entries(rate).map(([r, n]) => [r, `+${n}`])))}</div>
+      <div class="hud-like">${unrestBar(p)}<span class="note">${slaves ? `+${slaves * N.UNREST.perWorld} per campaign from ${plural(slaves, 'enslaved world')}` : 'No enslaved worlds'}</span></div>
       <div class="map">${mapSvg({ rooms: p.rooms, pos: p.home, glyph, hero: HERO, shape: 'circle', label: 'Your galaxy', classOf })}</div>
       <div class="row"><button class="btn primary" type="button" data-act="launch">Launch a campaign · ${N.maxSupply(p)} supply</button></div>
       <button class="btn ghost" type="button" data-act="wipe" style="justify-self:start">New galaxy</button>
@@ -100,8 +106,9 @@ function hubHtml() {
     <div class="box" style="display:grid;gap:12px;align-content:start">
       <h2>Your fleet</h2>
       <div><span class="label">Aggression</span> <span class="num" style="font-size:22px">${p.aggression}</span></div>
-      <p class="note">Two actions, rolled as in Lasers &amp; Feelings. Pick one, then roll its dice: each die under your Aggression is a hit for <b>Purge</b>, each one over it a hit for <b>Enslave</b>, and your Aggression exactly is a hit for either. 0 hits fail and the defenders strike back. 1 hit takes 1 strength, but they still strike back. 2 hits take 1 strength clean, and 3 take 2. A hit moves your Aggression one step toward the other action.</p>
+      <p class="note">Two actions, rolled as in Lasers &amp; Feelings. Pick one, then roll its dice: each die under your Aggression is a hit for <b>Purge</b>, each one over it a hit for <b>Enslave</b>, and your Aggression exactly is a hit for either. 0 hits fail, 1 hit takes 1 strength, 2 hits take 1 strength clean, and 3 take 2. On 0 or 1 hits it goes badly, as below. A hit moves your Aggression one step toward the other action.</p>
       <p class="note">The final blow decides their fate. A purged world yields its planet's alloys or fuel, an enslaved one yields labor. Defenders you don't finish regroup between campaigns.</p>
+      <p class="note"><b>Unrest.</b> When a purge goes badly, the defenders strike back and cost you supply. When an enslavement goes badly they don't, but unrest rises: +${N.UNREST.fail} on 0 hits, +${N.UNREST.scrape} on 1. Each enslaved world adds ${N.UNREST.perWorld} per campaign. At ${N.UNREST_MAX}, your largest enslaved world revolts: it rises ${N.REBELS.strength} stronger and strikes back ${N.REBELS.strike} harder, unrest resets, and rebels can only be purged.</p>
       ${strip(p.aggression)}
       <p class="note">You roll <b>${dice(1 + p.levels.warfleet)}</b> to Purge and <b>${dice(1 + p.levels.overseers)}</b> to Enslave.</p>
       ${aggCtl}
@@ -146,11 +153,13 @@ function panelHtml() {
       : `<b>The final blow decides their fate.</b> Purge: ${amounts(f.purge)}, enslave: ${amounts(f.enslave)}, per campaign.`;
     // Your Aggression counts for either action, so each hits on one run of faces.
     const button = (id, faces) =>
-      `<button class="btn attack" type="button" data-act="${id}"><span>${N.ACTIONS[id]} · ${dice(c.dice[id])}</span><small>a die hits on ${faces}</small></button>`;
+      N.allowed(c, id)
+        ? `<button class="btn attack" type="button" data-act="${id}"><span>${N.ACTIONS[id]} · ${dice(c.dice[id])}</span><small>a die hits on ${faces}</small></button>`
+        : `<button class="btn attack" type="button" disabled><span>${N.ACTIONS[id]}</span><small>not against rebels</small></button>`;
     // The buttons come first, so on a phone they sit right under the map.
-    head = `<div class="title-row"><h2>${core ? 'The Precursor throneworld' : `The ${esc(s.name)}`}</h2><div class="layers" aria-label="Strength ${s.strength} of ${s.max}">${pips}</div></div>
+    head = `<div class="title-row"><h2>${core ? 'The Precursor throneworld' : `The ${esc(s.name)}${s.rebel ? ' rebels' : ''}`}</h2><div class="layers" aria-label="Strength ${s.strength} of ${s.max}">${pips}</div></div>
       <div class="row">${button('purge', range(1, c.aggression))}${button('enslave', range(c.aggression, 6))}<button class="btn ghost small" type="button" data-act="recall">Recall</button></div>`;
-    actions = `<p class="note">Hits: 0 fail, 1 takes 1 strength, and both mean they strike back −${s.strike}. 2 take 1 clean, 3 take 2.</p><p class="note">${fate}</p>`;
+    actions = `<p class="note">Hits: 0 fail, 1 takes 1 strength, 2 take 1 clean, 3 take 2. On 0 or 1 hits, a purge draws fire (−${s.strike} supply), an enslavement stirs unrest (+${N.UNREST.fail} or +${N.UNREST.scrape}).</p><p class="note">${s.rebel ? 'Rebels can only be purged. Crush them and the world is yours again, purged.' : fate}</p>`;
   } else if (m === 'explore') {
     head = `<h2>${here.kind === 'home' ? 'Homeworld' : 'In orbit'}</h2><p class="note">Tap a system to fly there. Flying through your own systems is free; any other system costs 1 supply.</p>`;
     actions = '<div class="row"><button class="btn ghost" type="button" data-act="recall">Recall the fleet</button></div>';
@@ -175,6 +184,7 @@ function campaignHtml() {
     <div class="hud box">
       <div><span class="label">Held</span> <b class="num">${N.held(profile)}/${N.SYSTEMS}</b></div>
       <div class="grow"><span class="label">Supply ${c.supply}/${c.max}</span><div class="bar"><b style="width:${(100 * c.supply) / c.max}%"></b></div></div>
+      ${unrestBar(profile)}
       <div style="min-width:180px">${strip(c.aggression)}</div>
     </div>
     <div class="map">${mapSvg({ rooms: c.rooms, pos: c.pos, glyph, hero: HERO, reachable, next, shape: 'circle', label: 'The galaxy', classOf })}</div>
@@ -188,7 +198,7 @@ function render() {
 
 // ---------- input ----------
 
-const SOUNDS = { move: 'step', encounter: 'encounter', hit: 'hit', hurt: 'hurt', derelict: 'heal', out: 'hurt', won: 'crit', recall: 'escape' };
+const SOUNDS = { move: 'step', encounter: 'encounter', hit: 'hit', hurt: 'hurt', unrest: 'miss', revolt: 'sprung', derelict: 'heal', out: 'hurt', won: 'crit', recall: 'escape' };
 const TAKE_SOUNDS = { claimed: 'chest', purged: 'kill', enslaved: 'skill' };
 
 async function act(fn) {
@@ -252,7 +262,8 @@ screen.addEventListener('click', (e) => {
     S.play('descend');
     render();
   } else if (name === 'home') {
-    last = { taken: campaign.taken, got: N.settle(profile, campaign) };
+    const end = N.settle(profile, campaign);
+    last = { taken: campaign.taken, got: end.income, unrest: end.unrest, revolt: end.revolt };
     store.set(SAVE, profile);
     campaign = null;
     render();
