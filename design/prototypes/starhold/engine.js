@@ -21,6 +21,13 @@
 // fuel), an enslaved one yields labor. At the end of each campaign every
 // system you hold ships its output home, and you spend it on your fleet.
 // Take the Precursor throneworld to win.
+//
+// UNREST is the heat meter, kept between campaigns. Enslaving is the quiet
+// action: when it goes badly the defenders don't strike back, but unrest
+// rises, +2 on 0 hits and +1 on 1 hit. Each enslaved world you hold adds 1
+// unrest per campaign. At full unrest your largest enslaved world revolts: it
+// turns hostile again at full strength, unrest resets, and rebels can only be
+// purged.
 import { d6, makeFloor, neighbors, reveal } from '../shared/dice.js';
 
 export const SYSTEMS = 20;
@@ -30,6 +37,11 @@ export const AGG_MIN = 2;
 export const AGG_MAX = 5;
 export const MAX_DICE = 3;
 export const ACTIONS = { purge: 'Purge', enslave: 'Enslave' };
+export const UNREST_MAX = 10;
+// Unrest from an enslavement gone badly (0 or 1 hits), and from each enslaved
+// world per campaign. Rebels rise stronger than the species was.
+export const UNREST = { fail: 2, scrape: 1, perWorld: 1 };
+export const REBELS = { strength: 2, strike: 1 };
 export const RESOURCES = { alloys: 'Alloys', fuel: 'Fuel', labor: 'Labor' };
 
 // Each upgrade is bought with one resource.
@@ -52,6 +64,8 @@ export function newProfile(seed = Date.now()) {
     seed: seed >>> 0,
     campaigns: 0,
     won: false,
+    unrest: 0,
+    revolts: 0,
     aggression: START.aggression,
     stock: { ...ZERO },
     earned: { ...ZERO },
@@ -114,6 +128,7 @@ export function income(p) {
 }
 
 export const held = (p) => Object.values(p.rooms).filter((s) => s.owned).length;
+export const enslaved = (p) => Object.values(p.rooms).filter((s) => s.owned && s.fate === 'enslaved');
 export const aggressionRange = (p) => [[3, 3], [2, 4], [2, 5]][p.levels.doctrine];
 export const maxSupply = (p) => START.supply + 4 * p.levels.supply;
 
@@ -220,8 +235,8 @@ export function move(c, k) {
   emit(c, 'move', { from: c.prev, to: k });
   if (sys.kind === 'species' || sys.kind === 'core') {
     c.engaged = k;
-    const { name, strength, strike } = sys.species;
-    say(c, `The ${name} defend this system: strength ${strength}, they strike back for ${strike}.`);
+    const { name, strength, strike, rebel } = sys.species;
+    say(c, `The ${name}${rebel ? ' rebels' : ''} defend this system: strength ${strength}, they strike back for ${strike}.`);
     emit(c, 'encounter', { core: sys.kind === 'core' });
   } else if (!sys.owned) {
     if (sys.kind === 'derelict') {
@@ -238,19 +253,56 @@ export function move(c, k) {
 }
 
 function take(c, sys, fate) {
+  const rebels = sys.species?.rebel;
   sys.owned = true;
   sys.fate = fate;
+  if (rebels) sys.species.rebel = false;
   c.taken.push(fate);
   const out = Object.entries(yields(sys)).map(([r, n]) => `${n} ${RESOURCES[r].toLowerCase()}`).join(', ');
-  const what = { claimed: 'You claim an uninhabited world', purged: `The ${sys.species?.name} are purged`, enslaved: `The ${sys.species?.name} are enslaved` }[fate];
+  const what = { claimed: 'You claim an uninhabited world', purged: `The ${sys.species?.name}${rebels ? ' rebels' : ''} are purged`, enslaved: `The ${sys.species?.name} are enslaved` }[fate];
   say(c, `${what}. It yields ${out} per campaign.`);
   emit(c, 'take', { fate });
+  if (fate === 'enslaved') checkRevolt(c.p, c);
 }
+
+// ---------- unrest ----------
+
+function raiseUnrest(p, n, c) {
+  p.unrest = Math.min(UNREST_MAX, p.unrest + n);
+  if (c) emit(c, 'unrest', { amount: n });
+  checkRevolt(p, c);
+}
+
+/** At full unrest the largest enslaved world rises up and unrest resets. Returns the rebels' name, if any. */
+function checkRevolt(p, c) {
+  if (p.unrest < UNREST_MAX) return null;
+  const worlds = enslaved(p);
+  if (!worlds.length) return null;
+  const sys = worlds.reduce((a, b) => ((yields(b).labor ?? 0) > (yields(a).labor ?? 0) ? b : a));
+  const k = Object.keys(p.rooms).find((key) => p.rooms[key] === sys);
+  sys.owned = false;
+  sys.fate = null;
+  sys.kind = 'species';
+  if (!sys.species.rebel) Object.assign(sys.species, { max: sys.species.max + REBELS.strength, strike: sys.species.strike + REBELS.strike });
+  Object.assign(sys.species, { strength: sys.species.max, rebel: true });
+  p.unrest = 0;
+  p.revolts += 1;
+  if (c) {
+    say(c, `Revolt! The enslaved ${sys.species.name} rise up. Rebels can only be purged.`);
+    emit(c, 'revolt', { at: k });
+    // Rising up around your fleet: the battle starts here and now.
+    if (c.pos === k && !c.over) c.engaged = k;
+  }
+  return sys.species.name;
+}
+
+/** Whether an action can be used against the defenders here: rebels can only be purged. */
+export const allowed = (c, action) => Boolean(ACTIONS[action]) && !(action === 'enslave' && c.rooms[c.engaged]?.species?.rebel);
 
 /** One action, 'purge' or 'enslave', against the defenders here: roll its dice, count the hits. */
 export function attempt(c, action) {
   c.events = [];
-  if (mode(c) !== 'battle' || !ACTIONS[action]) return c;
+  if (mode(c) !== 'battle' || !allowed(c, action)) return c;
   const sys = c.rooms[c.engaged];
   const { species } = sys;
   const dice = Array.from({ length: c.dice[action] }, () => d6(c.p));
@@ -271,10 +323,15 @@ export function attempt(c, action) {
   } else {
     say(c, `${ACTIONS[action]} fails.`);
   }
-  if (count <= 1) {
+  // Gone badly: a purge draws fire, an enslavement stirs unrest.
+  if (count <= 1 && action === 'purge') {
     say(c, `The ${species.name} strike back: −${species.strike} supply.`);
     emit(c, 'hurt', { amount: species.strike });
     spend(c, species.strike);
+  } else if (count <= 1) {
+    const n = count === 0 ? UNREST.fail : UNREST.scrape;
+    say(c, `Word spreads of your slavers: unrest +${n}.`);
+    raiseUnrest(c.p, n, c);
   }
   spend(c, 1);
   return c;
@@ -314,8 +371,9 @@ export function recall(c) {
 }
 
 /**
- * Ends a campaign: every system you hold ships its output home, and defenders
- * you didn't defeat regroup to full strength. Returns what came in.
+ * Ends a campaign: every system you hold ships its output home, defenders you
+ * didn't defeat regroup to full strength, and each enslaved world adds 1
+ * unrest, which may set off a revolt. Returns what came in and who rose up.
  */
 export function settle(p, c) {
   for (const sys of Object.values(p.rooms)) if (sys.species && !sys.owned) sys.species.strength = sys.species.max;
@@ -326,5 +384,8 @@ export function settle(p, c) {
   }
   p.campaigns += 1;
   if (c.over === 'won') p.won = true;
-  return got;
+  const n = UNREST.perWorld * enslaved(p).length;
+  p.unrest = Math.min(UNREST_MAX, p.unrest + n);
+  const revolt = p.won ? null : checkRevolt(p, null);
+  return { income: got, unrest: n, revolt };
 }
