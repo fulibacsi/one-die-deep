@@ -59,7 +59,7 @@ function hubHtml() {
     ? `<p class="note">${plural(p.campaigns, 'campaign')}. You hold ${N.held(p)} of ${N.SYSTEMS} systems.</p>`
     : '<p class="note">Take the Precursor throneworld at the far end of the galaxy. A campaign lasts until your supply runs out or you recall the fleet. Systems you take stay yours, and after every campaign each one ships its output home.</p>';
   const shipped = last
-    ? `<p class="note"><b>Last campaign:</b> ${last.taken.length ? `took ${plural(last.taken.length, 'system')}` : 'took no systems'}. Your empire shipped home ${amounts(last.got)}.${last.unrest ? ` Your enslaved worlds added ${last.unrest} unrest.` : ''}</p>${last.revolt ? `<p class="note bad"><b>Revolt!</b> The enslaved ${esc(last.revolt)} rose up. Their world is hostile again, and rebels can only be purged.</p>` : ''}`
+    ? `<p class="note"><b>Last campaign:</b> ${last.taken.length ? `took ${plural(last.taken.length, 'system')}` : 'took no systems'}. Your empire shipped home ${amounts(last.got)}.${last.unrest || last.cooled ? ` Unrest: ${[last.unrest ? `+${last.unrest} from enslaved worlds` : '', last.cooled ? `−${last.cooled} as it cooled` : ''].filter(Boolean).join(', ')}.` : ''}</p>${last.revolt ? `<p class="note bad"><b>Revolt!</b> The enslaved ${esc(last.revolt)} rose up. Their world is hostile again, and rebels can only be purged.</p>` : ''}`
     : '';
   const slaves = N.enslaved(p).length;
   const full = !slaves && p.unrest >= N.UNREST_MAX;
@@ -68,7 +68,7 @@ function hubHtml() {
       <h2>${p.won ? 'The galaxy is yours.' : 'Your empire'}</h2>
       ${intro}${shipped}
       <div><span class="label">Stockpile, and income per campaign</span>${resources(p.stock, Object.fromEntries(Object.entries(rate).map(([r, n]) => [r, `+${n}`])))}</div>
-      <div class="hud-like">${unrestBar(p)}<span class="note">${slaves ? `+${slaves * N.UNREST.perWorld} per campaign from ${plural(slaves, 'enslaved world')}` : 'No enslaved worlds'}${full ? '. Unrest only falls when a world revolts, so the next world you enslave will revolt at once.' : ''}</span></div>
+      <div class="hud-like">${unrestBar(p)}<span class="note">Each campaign: ${slaves ? `+${slaves * N.UNREST.perWorld} from ${plural(slaves, 'enslaved world')}, ` : ''}−${N.UNREST.decay} as it cools${full ? '. While it\'s full, the next world you enslave revolts at once.' : ''}</span></div>
       <div class="map">${starmapSvg({ rooms: p.rooms, pos: p.home, label: 'Your galaxy' })}</div>
       <div class="row"><button class="btn primary" type="button" data-act="launch">Launch a campaign · ${N.maxSupply(p)} supply</button></div>
       <button class="btn ghost" type="button" data-act="wipe" style="justify-self:start">New galaxy</button>
@@ -78,7 +78,7 @@ function hubHtml() {
       <div><span class="label">Aggression</span> <span class="num" style="font-size:22px">${p.aggression}</span></div>
       <p class="note">Two actions, rolled as in Lasers &amp; Feelings. Pick one, then roll its dice: each die under your Aggression is a hit for <b>Purge</b>, each one over it a hit for <b>Enslave</b>, and your Aggression exactly is a hit for either. 0 hits fail, 1 hit takes 1 strength, 2 hits take 1 strength clean, and 3 take 2. On 0 or 1 hits it goes badly, as below. A hit moves your Aggression one step toward the other action.</p>
       <p class="note">The final blow decides their fate. A purged world yields its planet's alloys or fuel, an enslaved one yields labor. Defenders you don't finish regroup between campaigns.</p>
-      <p class="note"><b>Unrest.</b> When a purge goes badly, the defenders strike back and cost you supply. When an enslavement goes badly they don't, but unrest rises: +${N.UNREST.fail} on 0 hits, +${N.UNREST.scrape} on 1. Each enslaved world adds ${N.UNREST.perWorld} per campaign. At ${N.UNREST_MAX}, your largest enslaved world revolts: it rises ${N.REBELS.strength} stronger and strikes back ${N.REBELS.strike} harder, unrest resets, and rebels can only be purged.</p>
+      <p class="note"><b>Unrest.</b> When a purge goes badly, the defenders strike back and cost you supply. When an enslavement goes badly they don't, but unrest rises: +${N.UNREST.fail} on 0 hits, +${N.UNREST.scrape} on 1. Between campaigns, each enslaved world adds ${N.UNREST.perWorld} and unrest cools by ${N.UNREST.decay}, so ${N.UNREST.decay / N.UNREST.perWorld} enslaved worlds hold it steady. At ${N.UNREST_MAX}, your largest enslaved world revolts: it rises ${N.REBELS.strength} stronger and strikes back ${N.REBELS.strike} harder, unrest resets, and rebels can only be purged.</p>
       ${strip(p.aggression)}
       <p class="note">You roll <b>${dice(1 + p.levels.warfleet)}</b> to Purge and <b>${dice(1 + p.levels.overseers)}</b> to Enslave.</p>
       ${aggCtl}
@@ -233,7 +233,7 @@ screen.addEventListener('click', (e) => {
     render();
   } else if (name === 'home') {
     const end = N.settle(profile, campaign);
-    last = { taken: campaign.taken, got: end.income, unrest: end.unrest, revolt: end.revolt };
+    last = { taken: campaign.taken, got: end.income, unrest: end.unrest, cooled: end.cooled, revolt: end.revolt };
     store.set(SAVE, profile);
     campaign = null;
     render();

@@ -24,10 +24,11 @@
 //
 // UNREST is the heat meter, kept between campaigns. Enslaving is the quiet
 // action: when it goes badly the defenders don't strike back, but unrest
-// rises, +2 on 0 hits and +1 on 1 hit. Each enslaved world you hold adds 1
-// unrest per campaign. At full unrest your largest enslaved world revolts: it
-// turns hostile again at full strength, unrest resets, and rebels can only be
-// purged.
+// rises, +2 on 0 hits and +1 on 1 hit. Between campaigns each enslaved world
+// you hold adds 1 unrest and unrest cools by 2, so two enslaved worlds hold
+// steady and more build heat. At full unrest your largest enslaved world
+// revolts: it turns hostile again at full strength, unrest resets, and rebels
+// can only be purged.
 import { d6, makeFloor, neighbors, reveal } from '../shared/dice.js';
 
 export const SYSTEMS = 20;
@@ -38,9 +39,10 @@ export const AGG_MAX = 5;
 export const MAX_DICE = 3;
 export const ACTIONS = { purge: 'Purge', enslave: 'Enslave' };
 export const UNREST_MAX = 10;
-// Unrest from an enslavement gone badly (0 or 1 hits), and from each enslaved
-// world per campaign. Rebels rise stronger than the species was.
-export const UNREST = { fail: 2, scrape: 1, perWorld: 1 };
+// Unrest from an enslavement gone badly (0 or 1 hits), from each enslaved
+// world per campaign, and how much it cools per campaign. Rebels rise
+// stronger than the species was.
+export const UNREST = { fail: 2, scrape: 1, perWorld: 1, decay: 2 };
 export const REBELS = { strength: 2, strike: 1 };
 export const RESOURCES = { alloys: 'Alloys', fuel: 'Fuel', labor: 'Labor' };
 
@@ -372,8 +374,9 @@ export function recall(c) {
 
 /**
  * Ends a campaign: every system you hold ships its output home, defenders you
- * didn't defeat regroup to full strength, and each enslaved world adds 1
- * unrest, which may set off a revolt. Returns what came in and who rose up.
+ * didn't defeat regroup to full strength, and unrest changes: +1 per enslaved
+ * world, −2 as it cools. That may set off a revolt. Returns what came in, the
+ * unrest added and cooled, and who rose up.
  */
 export function settle(p, c) {
   for (const sys of Object.values(p.rooms)) if (sys.species && !sys.owned) sys.species.strength = sys.species.max;
@@ -384,8 +387,10 @@ export function settle(p, c) {
   }
   p.campaigns += 1;
   if (c.over === 'won') p.won = true;
-  const n = UNREST.perWorld * enslaved(p).length;
-  p.unrest = Math.min(UNREST_MAX, p.unrest + n);
+  const added = UNREST.perWorld * enslaved(p).length;
+  const before = p.unrest;
+  p.unrest = Math.max(0, Math.min(UNREST_MAX, p.unrest + added - UNREST.decay));
+  const cooled = Math.max(0, before + added - p.unrest);
   const revolt = p.won ? null : checkRevolt(p, null);
-  return { income: got, unrest: n, revolt };
+  return { income: got, unrest: added, cooled, revolt };
 }

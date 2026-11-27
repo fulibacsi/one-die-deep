@@ -238,6 +238,26 @@ What it shows:
   just one quick fight. Rebels rising 2 stronger and striking back 1 harder gave
   unrest its bite.
 
+### 2026-11-27: STARHOLD unrest cools
+
+Unrest only fell through a revolt, so with no enslaved worlds it could sit at
+full and turn the next enslavement into an instant revolt. On the owner's go,
+unrest now cools by 2 between campaigns, after each enslaved world adds its 1:
+two enslaved worlds hold it steady, and more build heat.
+
+`node tests/balance/prototypes/starhold.js`, 300 profiles per row:
+
+| Bot | Won | Campaigns to win (median, p10–p90) | Enslaved systems | Revolts per galaxy |
+| --- | --- | --- | --- | --- |
+| Careful | 100% | 14 (10–19) | 28% | 2.2 |
+| Odds | 98% | 15 (12–28) | 39% | 3.1 |
+| Random | 98% | 16 (12–23) | 36% | 3.5 |
+
+The game gets about 2 campaigns shorter for the careful bot, which enslaves more
+now. Ignoring unrest and fate still costs, but less: 1–2 campaigns instead of 3,
+and 2% of those galaxies stall instead of 4%. Cooling by 1 per campaign sits
+between: careful 15, odds 16, random 17, with 2.6 to 4.6 revolts per galaxy.
+
 ### 2026-11-27: STARHOLD star systems
 
 The owner asked for star systems instead of round rooms, seen from above, with
