@@ -270,11 +270,51 @@ moment and planets carry on instead of jumping back. With reduced motion
 everything stands still. STARHOLD draws this with its own renderer,
 `prototypes/starhold/starmap.js`; the other prototypes keep the shared map view.
 
+### 2026-11-27: would a bigger die change One Die Deep?
+
+The owner asked whether a d10, d12 or d20 would change the game dramatically.
+`node tests/balance/die-size.js` builds a copy of the engine where only the
+checks (hit, block, flee, spot a trap) roll the bigger die, and runs the balance
+bot: 2000 runs per class and level-up order. Its d6 row reproduces
+`simulate.js` exactly. Two ways to fit a bigger die:
+
+- **Recentred:** keep the stats and targets, shift the roll so an average lands
+  where a d6's does. A stat point is then worth 1/N of a roll instead of 1/6.
+- **Same odds:** map the roll onto the d6's scale, as if every stat and target
+  grew with the die. Each check succeeds as often as on a d6; only the naturals
+  get rarer, 1 and the top face each 1/N of the time.
+
+| Die | Fit | Wins: warrior / rogue / mage | Best minus worst level-up order |
+| --- | --- | --- | --- |
+| d6 | | 55 / 54 / 48% | 35 / 30 / 19 points |
+| d10 | Recentred | 45 / 41 / 37% | 24 / 13 / 11 |
+| d12 | Recentred | 41 / 38 / 39% | 19 / 13 / 14 |
+| d20 | Recentred | 33 / 35 / 39% | 13 / 18 / 14 |
+| d10 | Same odds | 44 / 35 / 26% | 35 / 23 / 13 |
+| d12 | Same odds | 47 / 44 / 29% | 36 / 29 / 12 |
+| d20 | Same odds | 43 / 35 / 22% | 36 / 24 / 13 |
+
+What it shows:
+
+- **Keeping the small stats, a bigger die makes the game about luck.** The gap
+  between the best and worst level-up order shrinks to a third or half, and
+  wins fall.
+- **Even at the same odds, the naturals carry the current balance.** On a d6 a
+  natural 1 or 6 decides a third of all checks; on a d20, a tenth. With fewer
+  crits and lucky blocks, wins fall 8 to 26 points, the mage's most.
+- **Recommendation:** keep the d6. A bigger die pays off only with bigger numbers
+  (more stat range or levels), a rebalance, and crits on more than one face.
+- **For NETDIVE and STARHOLD** (reasoned, not simulated): a bigger die needs the
+  2–5 stat stretched, and then each one-step shift moves the odds by 1/N, which
+  mutes the moving stat. The face that hits for either action gets rarer too.
+
 ## Parked ideas
 
 - **Class passives** for every class, perhaps unlocked at the first level-up. They
   add class identity. Until then, the Rogue's retaliation lives in its skills.
 - **Dice ladder:** a coin tutorial, a d4 intro, the d6 game, a d10 expert unlock.
-  This depends on whether "a single d6" can relax to "a single die".
+  This depends on whether "a single d6" can relax to "a single die". The die-size
+  sims above suggest a d10 mode would be luckier and harder, not more skilful,
+  unless stats grow with it.
 - From the write-up's open questions, still open: can a run fail hard, or only end
   softly; and how long should one run be.
