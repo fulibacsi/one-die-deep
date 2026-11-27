@@ -34,6 +34,8 @@ button { font: inherit; color: inherit; }
 .btn:hover:not(:disabled) { background: var(--line); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn.primary { background: var(--fg); color: var(--raised); }
+/* The plain hover background is too close to a primary button's text. */
+.btn.primary:hover:not(:disabled) { background: var(--soft); }
 .btn.ghost { border-color: var(--line); font-weight: 500; }
 .btn small { font-weight: 400; color: inherit; opacity: 0.75; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
