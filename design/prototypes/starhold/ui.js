@@ -1,6 +1,6 @@
 import * as N from './engine.js';
-import { dieHtml, spin, store } from '../shared/dice.js';
-import { mapSvg, neighbors } from '../shared/map-view.js';
+import { dieHtml, neighbors, spin, store } from '../shared/dice.js';
+import { starmapSvg } from './starmap.js';
 import * as S from '../../../src/sound.js';
 
 const SAVE = 'starhold:v2'; // v2 adds unrest; v1 saves don't carry over
@@ -16,7 +16,6 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const range = (a, b) => (a > b ? 'never' : a === b ? `${a}` : `${a}–${b}`);
 const dice = (n) => `${n} ${n === 1 ? 'die' : 'dice'}`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const LETTER = { alloys: 'A', fuel: 'F', labor: 'L' };
 const amounts = (obj) => Object.entries(obj).filter(([, n]) => n).map(([r, n]) => `+${n} ${N.RESOURCES[r].toLowerCase()}`).join(', ') || 'nothing';
 
 function resources(values, notes = {}) {
@@ -35,36 +34,6 @@ function strip(a) {
   return `<div class="strip" aria-label="Aggression ${a}: Purge hits on ${range(1, a - 1)}, either on ${a}, Enslave hits on ${range(a + 1, 6)}">${cells}</div>
     <div class="legend"><span>Purge &lt; ${a}</span><span>Either ${a}</span><span>Enslave &gt; ${a}</span></div>`;
 }
-
-// ---------- the map ----------
-
-const pts = (list) => list.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-const triangle = (r, cls) => `<polygon class="${cls}" points="${pts([[0, -r], [r * 0.95, r * 0.65], [-r * 0.95, r * 0.65]])}"/>`;
-const star = (r, cls) =>
-  `<polygon class="${cls}" points="${pts(Array.from({ length: 10 }, (_, i) => {
-    const a = (Math.PI / 5) * i - Math.PI / 2;
-    const d = i % 2 ? r * 0.45 : r;
-    return [d * Math.cos(a), d * Math.sin(a)];
-  }))}"/>`;
-
-function glyph(sys) {
-  if (sys.kind === 'home') return star(20, 'g-home');
-  if (sys.owned) {
-    const [r, n] = Object.entries(N.yields(sys))[0];
-    return `<circle class="g-${r}" r="14"/><text class="g-num" y="6" text-anchor="middle">${LETTER[r]}</text><text class="g-tag" y="37" text-anchor="middle">+${n}</text>`;
-  }
-  if (sys.species) {
-    const core = sys.kind === 'core';
-    // In the triangle: strength. Under it: the planet's resource, and how hard they strike back.
-    return `${triangle(core ? 26 : 19, sys.species.rebel ? 'g-rebel' : 'g-foe')}<text class="g-num" y="${core ? 9 : 8}" text-anchor="middle">${sys.species.strength}</text><text class="g-tag" y="38" text-anchor="middle">${core ? '' : `${LETTER[sys.planet]} `}−${sys.species.strike}</text>`;
-  }
-  const ring = `<circle class="g-ring g-${sys.planet}" r="12"/><text class="g-tag" y="6" text-anchor="middle">${LETTER[sys.planet]}</text>`;
-  if (sys.kind === 'derelict') return `${ring}<path class="g-ink" d="M-20 -20L-12 -12M14 -18L20 -12M-18 16L-12 12"/>`;
-  return ring;
-}
-
-const HERO = '<polygon class="g-hero" points="-10,-13 13,0 -10,13"/>';
-const classOf = (sys) => (sys.owned ? 'owned' : '');
 
 // ---------- between campaigns ----------
 
@@ -99,7 +68,7 @@ function hubHtml() {
       ${intro}${shipped}
       <div><span class="label">Stockpile, and income per campaign</span>${resources(p.stock, Object.fromEntries(Object.entries(rate).map(([r, n]) => [r, `+${n}`])))}</div>
       <div class="hud-like">${unrestBar(p)}<span class="note">${slaves ? `+${slaves * N.UNREST.perWorld} per campaign from ${plural(slaves, 'enslaved world')}` : 'No enslaved worlds'}</span></div>
-      <div class="map">${mapSvg({ rooms: p.rooms, pos: p.home, glyph, hero: HERO, shape: 'circle', label: 'Your galaxy', classOf })}</div>
+      <div class="map">${starmapSvg({ rooms: p.rooms, pos: p.home, label: 'Your galaxy' })}</div>
       <div class="row"><button class="btn primary" type="button" data-act="launch">Launch a campaign · ${N.maxSupply(p)} supply</button></div>
       <button class="btn ghost" type="button" data-act="wipe" style="justify-self:start">New galaxy</button>
     </div>
@@ -187,7 +156,7 @@ function campaignHtml() {
       ${unrestBar(profile)}
       <div style="min-width:180px">${strip(c.aggression)}</div>
     </div>
-    <div class="map">${mapSvg({ rooms: c.rooms, pos: c.pos, glyph, hero: HERO, reachable, next, shape: 'circle', label: 'The galaxy', classOf })}</div>
+    <div class="map">${starmapSvg({ rooms: c.rooms, pos: c.pos, reachable, next })}</div>
     ${panelHtml()}
   </section>`;
 }

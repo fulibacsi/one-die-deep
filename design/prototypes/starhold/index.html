@@ -12,7 +12,7 @@
    Your empire and fleet between campaigns; the galaxy and battle console during one. */
 :root {
   --bg: #eef1f7; --raised: #fbfcff; --fg: #1b2440; --soft: #5a6585; --line: #d3d9e8;
-  --accent: #0f7487; --good: #1f7a4d; --bad: #b3352b; --zero: #a86f00; --territory: #d7ecef;
+  --accent: #0f7487; --good: #1f7a4d; --bad: #b3352b; --zero: #a86f00; --territory: #d7ecef; --star: #d99400;
   --alloys: #56677f; --fuel: #c05a12; --labor: #7b4aa6;
   --font-display: 'Orbitron', 'IBM Plex Sans', system-ui, sans-serif;
   --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -21,13 +21,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0a0e1a; --raised: #111829; --fg: #dbe3ff; --soft: #8592b8; --line: #252f4d;
-    --accent: #5ed3e6; --good: #6fdc9c; --bad: #ff6b6b; --zero: #ffd166; --territory: #12313a;
+    --accent: #5ed3e6; --good: #6fdc9c; --bad: #ff6b6b; --zero: #ffd166; --territory: #12313a; --star: #ffd27a;
     --alloys: #aab9d1; --fuel: #ff9f43; --labor: #c59dff; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0a0e1a; --raised: #111829; --fg: #dbe3ff; --soft: #8592b8; --line: #252f4d;
-  --accent: #5ed3e6; --good: #6fdc9c; --bad: #ff6b6b; --zero: #ffd166; --territory: #12313a;
+  --accent: #5ed3e6; --good: #6fdc9c; --bad: #ff6b6b; --zero: #ffd166; --territory: #12313a; --star: #ffd27a;
   --alloys: #aab9d1; --fuel: #ff9f43; --labor: #c59dff; color-scheme: dark;
 }
 body {
@@ -87,28 +87,42 @@ body {
 .up .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 104px; }
 .lv { font-size: 11px; color: var(--soft); }
 
-.map .room { fill: var(--raised); stroke: var(--fg); stroke-width: 3; }
-.map .room.owned { fill: var(--territory); stroke: var(--accent); }
-.map .room.unknown { fill: none; stroke: var(--soft); stroke-dasharray: 6 5; }
-.map .room.here { stroke: var(--accent); stroke-width: 6; }
-.map .door { stroke: var(--soft); stroke-width: 3; }
-.map .door.unknown { stroke: var(--soft); stroke-width: 2; stroke-dasharray: 4 4; }
+/* The galaxy from above: stars with turning planets, lanes between systems. */
+.map .lane { stroke: var(--soft); stroke-width: 2.5; opacity: 0.55; }
+.map .lane.held { stroke: var(--accent); stroke-width: 3.5; opacity: 0.9; }
+.map .lane.unknown { stroke-dasharray: 4 5; opacity: 0.45; }
+.map .rim { fill: none; stroke: var(--line); stroke-width: 2; }
+.map .rim.owned { fill: var(--territory); stroke: var(--accent); stroke-width: 2.5; }
+.map .rim.unknown { stroke: var(--soft); stroke-dasharray: 5 5; opacity: 0.7; }
+.map .path { fill: none; stroke: var(--soft); stroke-width: 1; opacity: 0.4; }
+.map .star { fill: var(--star); }
+.map .star.home { fill: var(--accent); }
+.map .star.core { fill: var(--bad); }
+.map .halo { opacity: 0.22; }
+.map .planet.alloys, .map .badge.alloys { fill: var(--alloys); }
+.map .planet.fuel, .map .badge.fuel { fill: var(--fuel); }
+.map .badge.labor { fill: var(--labor); }
+.map .planet.dust { fill: var(--soft); }
+.map .foe { fill: var(--bad); }
+.map .foe.rebel { fill: var(--zero); }
+.map .b-num { fill: var(--raised); font-family: var(--font-mono); font-weight: 600; font-size: 13px; text-anchor: middle; }
+.map .tag { fill: var(--soft); font-family: var(--font-mono); font-size: 15px; text-anchor: middle; }
+.map .wreck { fill: none; stroke: var(--fg); stroke-width: 2.5; stroke-linecap: round; }
+.map .fleet-path { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 2 4; opacity: 0.8; }
+.map .ship { fill: var(--accent); }
+/* Orbits turn about the star: each group's box is centered on it. Reduced
+   motion stops them where they are (base.css turns animations off). */
+.map .spin { transform-box: fill-box; transform-origin: center; animation-name: orbit; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.map .sys * { pointer-events: none; }
 .map .reach { cursor: pointer; }
-.map .reach .room { pointer-events: all; }
-.map .reach:hover .room { fill: var(--line); }
-@media (hover: none) { .map .reach.next .room { stroke: var(--accent); } }
-.g-foe { fill: var(--bad); }
-.g-rebel { fill: var(--zero); }
+.map .reach .rim { pointer-events: all; }
+.map .reach:hover .rim { stroke: var(--accent); }
+.map .reach:focus-visible { outline: none; }
+.map .reach:focus-visible .rim { stroke: var(--accent); stroke-width: 3.5; }
+@media (hover: none) { .map .reach.next .rim { stroke: var(--accent); stroke-dasharray: none; } }
 .bar.unrest b { background: var(--bad); }
 .hud-like { display: grid; gap: 4px; }
-.g-hero { fill: var(--accent); }
-.g-home { fill: var(--accent); }
-.g-alloys { fill: var(--alloys); } .g-fuel { fill: var(--fuel); } .g-labor { fill: var(--labor); }
-.g-ring { fill: none; stroke-width: 3; }
-.g-ring.g-alloys { stroke: var(--alloys); } .g-ring.g-fuel { stroke: var(--fuel); }
-.g-ink { fill: none; stroke: var(--fg); stroke-width: 3; }
-.g-num { fill: var(--raised); font-family: var(--font-mono); font-weight: 600; font-size: 16px; }
-.g-tag { fill: var(--soft); font-family: var(--font-mono); font-size: 17px; }
 
 .result { display: flex; gap: 14px; align-items: center; }
 .result .what { font-weight: 600; font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; }
